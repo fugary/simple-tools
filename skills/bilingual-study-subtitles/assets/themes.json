@@ -1,0 +1,20 @@
+{
+  "classic": {
+    "en_color": "#FFFFFF",
+    "zh_color": "#FFBC00",
+    "highlight_color": "#FF7B25",
+    "hint_color": "#FF7B25"
+  },
+  "soft": {
+    "en_color": "#FFF8E7",
+    "zh_color": "#A8E6CF",
+    "highlight_color": "#FFB86C",
+    "hint_color": "#FFB86C"
+  },
+  "contrast": {
+    "en_color": "#FFFFFF",
+    "zh_color": "#80E5FF",
+    "highlight_color": "#FF8EC7",
+    "hint_color": "#FF8EC7"
+  }
+}

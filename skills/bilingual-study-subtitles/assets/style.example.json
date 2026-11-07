@@ -1,0 +1,16 @@
+{
+  "en_color": "#FFFFFF",
+  "zh_color": "#FFBC00",
+  "highlight_color": "#FF7B25",
+  "hint_color": "#FF7B25",
+  "outline_color": "#101820",
+  "hint_background": "#101820",
+  "font_en": "Arial",
+  "font_zh": "Noto Sans CJK SC",
+  "en_size_ratio": 0.053,
+  "zh_size_ratio": 0.044,
+  "hint_size_ratio": 0.044,
+  "bottom_margin_ratio": 0.044,
+  "top_margin_ratio": 0.04,
+  "side_margin_ratio": 0.04
+}

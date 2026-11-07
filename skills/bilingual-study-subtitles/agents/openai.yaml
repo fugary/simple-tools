@@ -1,0 +1,4 @@
+interface:
+  display_name: "双语学习字幕"
+  short_description: "按音频对齐中英学习字幕，支持独立配色、重点提示和原分辨率烧录"
+  default_prompt: "使用 $bilingual-study-subtitles，根据视频和中英全文生成连续显示的双语字幕，应用预设或自定义配色，并保持原分辨率烧录。"
