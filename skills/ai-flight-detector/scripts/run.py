@@ -171,6 +171,7 @@ def ensure_kernel(python, explicit=None, proxy=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--setup-only", action="store_true")
+    parser.add_argument("--functional", choices=["antigravity"], help="实际生成及代理路径核对")
     parser.add_argument("--no-direct-download", action="store_true")
     parser.add_argument("--kernel")
     parser.add_argument("--download-proxy")
@@ -186,7 +187,8 @@ def main(argv=None):
         if args.setup_only:
             print("运行环境和内核已自动准备完成。", flush=True)
             return 0
-        command = [str(python), "-X", "utf8", str(DETECTOR), *rest, "--kernel", kernel]
+        entry = DETECTOR.with_name("functional.py") if args.functional else DETECTOR
+        command = [str(python), "-X", "utf8", str(entry), *rest, "--kernel", kernel]
         if args.download_proxy:
             command += ["--download-proxy", args.download_proxy]
         elif not args.no_direct_download:

@@ -80,6 +80,17 @@ class AutomationTests(unittest.TestCase):
             self.assertEqual(command[command.index("--region") + 1], "US")
             self.assertEqual(command[command.index("--limit") + 1], "3")
 
+    def test_functional_entrypoint_preserves_model_and_filter(self):
+        with patch.object(r, "ensure_python", return_value=Path("python")), \
+             patch.object(r, "ensure_kernel", return_value="core"), \
+             patch.object(r.shutil, "which", return_value="curl"), \
+             patch.object(r.subprocess, "call", return_value=0) as call:
+            self.assertEqual(r.main(["--functional", "antigravity", "--input-env", "SUB", "--model", "model-id", "--node", "完整节点名"]), 0)
+            command = call.call_args.args[0]
+            self.assertTrue(command[3].endswith("functional.py"))
+            self.assertEqual(command[command.index("--node") + 1], "完整节点名")
+            self.assertEqual(command[command.index("--model") + 1], "model-id")
+
     def test_download_falls_back_without_dropping_explicit_proxy(self):
         opener = Mock()
         opener.open.side_effect = OSError("network failure")

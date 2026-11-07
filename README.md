@@ -16,4 +16,4 @@
 
 使用节点检测技能时，可将整个技能目录复制到 Codex 的技能目录（如 `~/.codex/skills/`），或在支持技能安装的工具中指定本仓库的 `skills/ai-flight-detector` 路径。运行需要 Python 3.10+ 和系统 curl；入口会自动准备虚拟环境、依赖及官方 Mihomo 内核。
 
-节点检测不等于账号或模型调用验证。Antigravity 目前仅检测公开站点，无法据此确认登录后可用性。
+默认模式只检测公开页面。`run.py --functional antigravity --input-env SUBSCRIPTION_URL --model <agy-model-id>` 可使用已登录的 Antigravity CLI 做最小实际生成及代理路由观察，输出完整节点名、出口、耗时、原因和通过清单。需要本机已安装的 `agy`；先用 `agy models` 查询模型 ID。CLI 通过不代表 IDE 当前会话或独立 Gemini API Key 可用。

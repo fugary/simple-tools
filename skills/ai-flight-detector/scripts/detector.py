@@ -293,9 +293,11 @@ def free_port():
 
 
 class KernelSession:
-    def __init__(self, kernel, node, startup_timeout=15):
+    def __init__(self, kernel, node, startup_timeout=15, capture_route=False):
         self.kernel, self.node, self.startup_timeout = kernel, node, startup_timeout
         self.process = self.folder = None
+        self.capture_route = capture_route
+        self.route_log = None
 
     def __enter__(self):
         try:
@@ -303,6 +305,9 @@ class KernelSession:
             directory = Path(self.folder.name)
             port, password = free_port(), secrets.token_hex(16)
             config = isolated_config(self.node, port, password)
+            if self.capture_route:
+                config["log-level"] = "info"
+                self.route_log = directory / "route.log"
             path = directory / "config.yaml"
             path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
             if os.name != "nt":
@@ -313,8 +318,13 @@ class KernelSession:
                                      env=clean_env(), creationflags=CREATE_FLAGS)
             if checked.returncode:
                 raise DetectorError("kernel_config_rejected")
-            self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            env=clean_env(), creationflags=CREATE_FLAGS)
+            if self.capture_route:
+                with self.route_log.open("w", encoding="utf-8") as log:
+                    self.process = subprocess.Popen(command, stdout=log, stderr=log,
+                                                    env=clean_env(), creationflags=CREATE_FLAGS)
+            else:
+                self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                env=clean_env(), creationflags=CREATE_FLAGS)
             deadline = time.monotonic() + self.startup_timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
