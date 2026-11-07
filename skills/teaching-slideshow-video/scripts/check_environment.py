@@ -30,7 +30,7 @@ def main():
     probe, probe_text = inspect_executable(a.ffprobe, ['-version'])
     wh, _ = inspect_executable(a.whisper, ['--help'])
     packages = {}
-    for package in ['edge-tts','pysubs2']:
+    for package in ['mlx-audio','edge-tts','pysubs2']:
         try: packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError: packages[package] = None
     fc, fonts = inspect_executable('fc-list', [':lang=zh','family'])
@@ -43,7 +43,7 @@ def main():
                   chinese_font_candidates=sorted(set(fonts.strip().splitlines()))[:20] if fc else [],
                   notes=['Font list may be unavailable; inspect actual rendering.',
                          'Network access, TTS availability and ASR model files are not tested.',
-                         'edge-tts is optional when all narration audio is supplied.'])
+                         'Lily uses local mlx-audio and model weights. Existing recordings need no TTS runtime.'])
     print(json.dumps(report,ensure_ascii=False,indent=2))
     return 0 if sys.version_info >= (3,9) and all(caps.values()) and packages['pysubs2'] else 1
 

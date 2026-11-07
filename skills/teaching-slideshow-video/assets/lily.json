@@ -1,0 +1,23 @@
+{
+  "voice": "CG02 Lily · Qwen3-TTS Base",
+  "model": "Qwen3-TTS-12Hz-0.6B-Base-bf16",
+  "runtime": "mlx_audio",
+  "offline": true,
+  "generate": {
+    "ref_audio": "CG02 Lily.wav",
+    "ref_text": "I'm Lily. It's nice to meet you. What are you doing today? Oh, that's really cool. I like science because we get to try new things and learn how they work.",
+    "lang_code": "english",
+    "speed": 1.0,
+    "temperature": 0.55,
+    "max_tokens": 200
+  },
+  "postprocess": {
+    "tempo": 1.0,
+    "peak_ceiling": 0.67,
+    "amplify": false
+  },
+  "pause_seconds": {
+    "sentence": 2,
+    "review_question": 3.5
+  }
+}

@@ -1,3 +1,4 @@
 # Python 3.9+; install in a virtual environment.
 edge-tts>=7.2,<8
 pysubs2>=1.8,<2
+Pillow>=9

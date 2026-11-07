@@ -1,0 +1,4 @@
+interface:
+  display_name: "国家介绍双语学习视频"
+  short_description: "从国家名制作六年级英语学习视频，含双语稿、主题配图、逐句配音和互动复习"
+  default_prompt: "用 $country-study-video 为墨西哥制作一集六年级英语国家介绍双语学习视频。"

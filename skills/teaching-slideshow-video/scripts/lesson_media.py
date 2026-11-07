@@ -51,22 +51,41 @@ def manifest(path):
 
 
 async def narrate(args):
-    import edge_tts
     data = manifest(args.manifest)
     out = Path(args.out).resolve()
     if out.exists(): raise FileExistsError(out)
     cache = Path(args.cache).resolve(); cache.mkdir(parents=True, exist_ok=True)
-    version = importlib.metadata.version('edge-tts')
+    lily_jobs = []
     jobs = {}
     for cue in data['cues']:
         if cue.get('audio'): continue
-        config = dict(provider='edge-tts', version=version,
+        voice = cue.get('voice', data.get('voice'))
+        provider = cue.get('provider', data.get('provider'))
+        is_lily = voice in ('Lily', 'CG02 Lily', 'CG02 Lily · Qwen3-TTS Base')
+        if provider is None:
+            explicit_edge_rate = cue.get('rate', data.get('rate')) not in (None, 'native', '+0%', '0%')
+            provider = 'lily' if is_lily or (voice is None and not explicit_edge_rate) else 'edge-tts'
+        if provider == 'lily':
+            if voice is not None and not is_lily:
+                raise ValueError(f'Unknown Lily voice: {voice}')
+            if cue.get('rate', data.get('rate', 'native')) not in ('native', '+0%', '0%'):
+                raise ValueError('The Lily preset uses its confirmed natural speed.')
+            lily_jobs.append((cue, cue.get('spoken', cue['en'])))
+            continue
+        if provider != 'edge-tts':
+            raise ValueError(f'Unknown narration provider: {provider}')
+        config = dict(provider='edge-tts', version=importlib.metadata.version('edge-tts'),
                       text=cue.get('spoken', cue['en']),
                       voice=cue.get('voice', data.get('voice', 'en-US-JennyNeural')),
                       rate=cue.get('rate', data.get('rate', '-15%')))
         key = hashlib.sha256(json.dumps(config, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         dest = cache / (key+'.mp3'); cue['audio'] = str(dest)
         jobs[key] = (config, dest)
+    if lily_jobs:
+        from lily_voice import generate_missing
+        generate_missing(lily_jobs, cache)
+    if jobs:
+        import edge_tts
     sem = asyncio.Semaphore(3)
     async def generate(config, dest):
         metadata = dest.with_suffix('.json')
