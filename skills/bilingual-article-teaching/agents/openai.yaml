@@ -1,0 +1,4 @@
+interface:
+  display_name: "英语文章教学优化"
+  short_description: "把英语课文整理成中英学习稿，核对词组高亮、语法提示与复习例句"
+  default_prompt: "用 $bilingual-article-teaching 把这篇文章整理成适合学生的中英学习稿，保留原文例句，生成 Word 和字幕待对齐稿。"
