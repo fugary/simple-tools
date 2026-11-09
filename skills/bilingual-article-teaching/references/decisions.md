@@ -26,3 +26,9 @@
 **共用解释也要看得见原句。** 将 The air cools down. 和 The water turns into little water drops. 在 Word 中相邻同页。第一句指出 air 在这里是不可数名词；第二句联系两句，说明一般现在时里这两个主语各自按单数处理，所以分别用 cools、turns。视频保留两个完整跟读机会。
 
 **留白在声音中的位置。** They are talking about _____. 的画面保留横线，朗读稿写 They are talking about.，句末停顿。The text is (     ). 同理。若是 The ___ is blue.，先读 The，留出作答时间，再读 is blue，整句仍对应一条字幕。Its leaves help it (to) make food. 中的 to 有实际语法作用，可选择一种完整读法。
+
+## 自学提示的误读与改写
+
+- **时间方向和词序。** “ago 放在一段时间之后”容易让孩子把“之后”当成事情发生的时间。可以写成“two thousand years ago 是从现在往前数两千年。ago 写在表示时长的词语后面。加上 over（超过），over two thousand years ago 就是‘两千多年前’。”复核时可问“从什么时候往哪边数？比两千年多还是少？”若课文另有 three years later，再用故事里提到的具体事件说明从那件事往后数三年。
+- **否定的范围。** 讲 I don’t need to leave until ten 时，可以问“十点前必须走吗？能看出实际几点走吗？”提示可写成“我十点前不用走。这句话说明十点以前没有离开的必要，实际几点走还不知道。”
+- **规则的适用条件。** 遇到“问一个人的习惯用 does”，把同一个人分别当作交谈对象和谈论对象试读。面对她可以问“How often do you swim?” 向别人打听她的习惯时可以问“How often does she swim?” 两句都在问她游泳的频率，助动词随主语 you 或 she 改变。
