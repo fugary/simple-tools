@@ -1,5 +1,6 @@
 """Apply the 1080p teaching subtitle preset."""
 import argparse
+import json
 from functools import lru_cache
 from pathlib import Path
 import re
@@ -11,11 +12,93 @@ import pysubs2 as ass
 
 
 def compact(note):
-    note = note.replace(r'\N', ' ').strip()
-    match = re.fullmatch(r'(.+?)\s*表示“([^”]+)”。?', note)
-    if match:
-        return match[1].rstrip('， ') + '   ' + match[2]
-    return note
+    # Older ASS files may carry a display break in the middle of a Chinese word.
+    return re.sub(r'(?<=[A-Za-z0-9])\\N(?=[A-Za-z0-9])', ' ', note).replace(r'\N', '').strip()
+
+
+def approved_notes(build):
+    timeline = build / 'timeline.json'
+    layout = build / '顶部提示分行.json'
+    if not timeline.exists():
+        if layout.exists():
+            raise ValueError('核对顶部提示分行需要同目录的 timeline.json。')
+        return {}
+    cues = json.loads(timeline.read_text(encoding='utf-8'))
+    reviewed = {}
+    if layout.exists():
+        for row in json.loads(layout.read_text(encoding='utf-8')):
+            index, lines = row['条目'], row['显示行']
+            if (type(index) is not int or not 1 <= index <= len(cues) or index in reviewed
+                    or not isinstance(lines, list) or not 1 <= len(lines) <= 3
+                    or not all(isinstance(line, str) and line and line == ' '.join(line.split())
+                               and line[0] not in '。，、！？；：）】”’' for line in lines)):
+                raise ValueError(f'请核对顶部提示分行的条目和显示行：{index}')
+            pattern = ' ?'.join(re.escape(line) for line in lines)
+            if not re.fullmatch(pattern, ' '.join(cues[index-1].get('notes', []))):
+                raise ValueError(f'第 {index} 条提示已改稿，请更新对应的显示行。')
+            reviewed[index] = lines
+
+    escape = str.maketrans('\\{}', '＼｛｝')
+    notes = {}
+    for index, cue in enumerate(cues, 1):
+        if cue.get('notes'):
+            # Use the same whitespace handling and ASS escaping as the base writer.
+            parts = [' '.join(part.split()).translate(escape) for part in cue['notes']]
+            lines = [line.translate(escape) for line in reviewed.get(index, [])]
+            notes[round(cue['start'] * 100)] = parts, lines
+    return notes
+
+
+def meaning_chunks(parts, allow_comma=False):
+    # An authored note boundary always separates complete teaching points.
+    pairs = {'“': '”', '‘': '’', '（': '）', '(': ')', '【': '】', '《': '》', '"': '"'}
+    chunks = []
+    for part in parts:
+        start = 0
+        closing = []
+        for i, char in enumerate(part):
+            if closing and char == closing[-1]:
+                closing.pop()
+            elif char in pairs:
+                closing.append(pairs[char])
+            elif not closing and char in ('。！？；;' + ('，' if allow_comma else '')):
+                if i + 1 < len(part) and part[i + 1] in '。！？；，、：!?;,.…':
+                    continue
+                chunks.append(part[start:i+1])
+                start = i+1
+        if start < len(part):
+            chunks.append(part[start:])
+        if chunks:
+            chunks[-1] += ' '
+    return chunks
+
+
+def fit_hint(parts, font_size, fits, reviewed_lines=()):
+    full = ' '.join(parts)
+    minimum = round(font_size * .76)
+    for size in [*range(font_size, minimum, -2), minimum]:
+        if reviewed_lines:
+            if all(fits(line, size) for line in reviewed_lines):
+                return reviewed_lines, size
+            continue
+        if fits(full, size):
+            return [full], size
+        for allow_comma in (False, True):
+            lines = []
+            current = ''
+            for chunk in meaning_chunks(parts, allow_comma):
+                combined = current + chunk
+                if fits(combined.strip(), size):
+                    current = combined
+                elif current and fits(chunk.strip(), size):
+                    lines.append(current.strip())
+                    current = chunk
+                else:
+                    break
+            else:
+                if current and len(lines) < 3:
+                    return lines + [current.strip()], size
+    raise ValueError('请将提示按意思分成短句或多个 notes 项，再生成字幕：' + full)
 
 
 def lettering(note, english_font, chinese_font):
@@ -31,7 +114,7 @@ def rounded_box(w, h, r):
             f'l 0 {r} b 0 8 8 0 {r} 0')
 
 
-def style_hints(doc, ffmpeg, english_font, chinese_font):
+def style_hints(doc, ffmpeg, english_font, chinese_font, source_notes=None):
     width, height = int(doc.info['PlayResX']), int(doc.info['PlayResY'])
     top = round(height * .10)
     hints = [e for e in doc if e.style == 'Hint']
@@ -65,29 +148,25 @@ def style_hints(doc, ffmpeg, english_font, chinese_font):
                 raise ValueError('Empty note: '+text)
             return box
 
+        def fits(line, size):
+            left, _, right, _ = ink(lettering(line, english_font, chinese_font), size)
+            return right - left + 2 * pad_x <= width * .90
+
         for cue in hints:
-            text = lettering(compact(cue.text), english_font, chinese_font)
-            size = font_size
-            while True:
-                l,t,r,b = ink(text, size)
-                w,h = r-l+2*pad_x,b-t+2*pad_y
-                if w <= width*.90:
-                    break
-                if size <= round(font_size*.76):
-                    # Wrap at a space or CJK character boundary closest to the middle.
-                    plain = compact(cue.text)
-                    cuts = [i for i in range(1,len(plain)) if plain[i].isspace() or
-                            ('\u3400' <= plain[i] <= '\u9fff')]
-                    if not cuts:
-                        raise ValueError('Split this long note into two phrases: '+plain)
-                    cut=min(cuts,key=lambda i:abs(i-len(plain)/2))
-                    text=lettering(plain[:cut].strip(), english_font, chinese_font)+r'\N'+lettering(plain[cut:].strip(), english_font, chinese_font)
-                    l,t,r,b=ink(text,size)
-                    w,h=r-l+2*pad_x,b-t+2*pad_y
-                    if w > width*.90:
-                        raise ValueError('Shorten note: '+plain)
-                    break
-                size-=2
+            plain = compact(cue.text)
+            parts, reviewed_lines = (source_notes or {}).get(cue.start // 10, ([], []))
+            # A manually edited ASS hint takes precedence over a stale timeline.
+            if not parts or ''.join(''.join(parts).split()) != ''.join(plain.split()):
+                if reviewed_lines:
+                    raise ValueError(f'请核对 {cue.start / 1000:.2f}s 的基础字幕与已审核提示。')
+                parts = [plain]
+            try:
+                lines, size = fit_hint(parts, font_size, fits, reviewed_lines)
+            except ValueError as exc:
+                raise ValueError(f'{cue.start / 1000:.2f}s: {exc}') from exc
+            text = r'\N'.join(lettering(line, english_font, chinese_font) for line in lines)
+            l,t,r,b = ink(text, size)
+            w,h = r-l+2*pad_x,b-t+2*pad_y
             x,y=(width-w)//2,top
             plate = cue.copy()
             plate.style='StudyHintPlate'
@@ -129,7 +208,7 @@ def load_subtitles(build):
 def save_styled_subtitles(doc, build, ffmpeg, body_start=0):
     duration = max(event.end for event in doc)
     gradient(doc, 713, 972, .26, body_start, duration)
-    style_hints(doc, ffmpeg, doc.styles['Default'].fontname, doc.styles['Hint'].fontname)
+    style_hints(doc, ffmpeg, doc.styles['Default'].fontname, doc.styles['Hint'].fontname, approved_notes(build))
     with tempfile.TemporaryDirectory(dir=build) as work:
         output = Path(work) / 'styled.ass'
         doc.save(str(output))
