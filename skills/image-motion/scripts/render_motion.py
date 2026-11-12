@@ -19,9 +19,12 @@ from estimate_depth import VALID_BACKENDS, estimate_depth
 from mask_refiner import rasterize_polygons
 from motion_effects import (
     DepthParallaxEffect,
+    FireFlickerEffect,
     FlagClothWaveEffect,
     FoliageSwayEffect,
+    HeatHazeEffect,
     OverlayFxEffect,
+    PendulumSwingEffect,
     RotatePartEffect,
     SkyDriftEffect,
     WaterfallFlowEffect,
@@ -37,6 +40,9 @@ _EFFECT_TYPE_NAMES = {
     FoliageSwayEffect: "foliage_sway",
     FlagClothWaveEffect: "flag_cloth_wave",
     RotatePartEffect: "rotate_part",
+    FireFlickerEffect: "fire_flicker",
+    HeatHazeEffect: "heat_haze",
+    PendulumSwingEffect: "pendulum_swing",
     DepthParallaxEffect: "depth_parallax",
     OverlayFxEffect: "overlay_fx",
 }
@@ -101,6 +107,9 @@ def _save_debug_visuals(
                     SkyDriftEffect,
                     FoliageSwayEffect,
                     FlagClothWaveEffect,
+                    FireFlickerEffect,
+                    HeatHazeEffect,
+                    PendulumSwingEffect,
                 ),
             )
             and hasattr(eff, "mask")
@@ -113,6 +122,12 @@ def _save_debug_visuals(
                 tint[..., 0], tint[..., 1], tint[..., 2] = 255.0, 200.0, 90.0
             elif isinstance(eff, FlagClothWaveEffect):
                 tint[..., 0], tint[..., 1], tint[..., 2] = 255.0, 110.0, 90.0
+            elif isinstance(eff, FireFlickerEffect):
+                tint[..., 0], tint[..., 1] = 255.0, 125.0
+            elif isinstance(eff, HeatHazeEffect):
+                tint[..., 0], tint[..., 1], tint[..., 2] = 255.0, 60.0, 210.0
+            elif isinstance(eff, PendulumSwingEffect):
+                tint[..., 0], tint[..., 1] = 240.0, 220.0
             else:
                 tint[..., 1] = 230.0
             vis = np.clip(base_rgb * (1.0 - alpha) + tint * alpha, 0, 255).astype(np.uint8)

@@ -42,6 +42,11 @@ python scripts/check_environment.py
 2. **规划 `motion_plan.json`（先按图选配方，不盲套特效）。**
    按 [配方格式](references/plan-schema.md) 组合适合本图的动效原语：
    - **湖海/河流/瀑布/倒影图**：静水用 `water_ripple`（用 `polygons` 框出大概水体；若照片水面本身已有密集天然波纹，用 `amplitude: 0.45~0.65`、`shimmer: 0.3~0.4` 避免网格叠加）；瀑布或急流用 `waterfall_flow`（配 `angle: 90` 与底部水雾 `mist`）+ `static_regions`（锁定船只、栈道、岩石、文字水印）+ 可选 `sky_drift`、`sun_motes`。
+   - **篝火/烛光/露营/热浪场景**：火焰用 `fire_flicker`（底部严格锚定，焰尖微动与色温微调）+ `heat_haze`（热空气透明折射）+ `warm_glow`（光晕呼吸）+ 可选 `fireflies`。
+   - **夜空/星河/森林夜晚/极光场景**：夜空繁星用 `star_twinkle`（自动抓取亮星脉冲与十字芒刺）+ `aurora_veil`（极光光幔横向折叠波浪）+ 林间 `fireflies`（3D 漫游萤火虫光球）。
+   - **春日落樱/秋日落叶/园林微风**：落瓣用 `petal_leaf_drift`（支持 `mode: "petal"|"leaf"`，带有 3D 翻面与风力摆动无缝循环）+ `foliage_sway`（枝叶摆动）。
+   - **古迹/街巷/店铺挂牌/秋千**：悬挂招牌、挂灯、吊钟用 `pendulum_swing`（支点绝对锁定，单摆谐振并自动复原背景）。
+   - **金属/徽章/宝石/现代构图**：局部微光扫掠用 `light_sweep`（斜向高斯光带优雅流转）。
    - **多人物/建筑/古迹/户外抓拍图**：极克制的 `depth_parallax`（`strength: 0.025~0.035`，`sway_x: 0.0`，给出 `horizon_y` 与建筑/人物 `foreground_regions`）— 或直接省略 `depth_parallax` 仅做局部动效；若有旗帜/横幅/披风则配 `flag_cloth_wave`（设 `anchor_side` 固定旗杆边），若有风车/风扇则配 `rotate_part`（设 `max_y` 保护塔柱）+ `sky_drift` / `foliage_sway` / `sun_motes`，并把建筑主体与前景人物填入 `static_regions`。
    - **美食/热饮/餐桌/室内灯光图**：以局部动效为主（`overlay_fx` 的 `"steam"` 放在热食锚点，或 `"warm_glow"` 放在灯源），桌椅杯盘放进 `static_regions`；若需镜头微推，只用 `strength: 0.02~0.03`、`sway_x: 0.0`。
    - **纯图文/结构示意图**：**禁止局部水波/风吹扭曲文字与结构**，仅可用极轻 `depth_parallax`（`strength: 0.02`, `sway_x: 0.0`）或局部小光点 `sun_motes`。

@@ -34,8 +34,11 @@ from mask_refiner import (  # noqa: E402
 )
 from motion_effects import (  # noqa: E402
     DepthParallaxEffect,
+    FireFlickerEffect,
     FlagClothWaveEffect,
+    HeatHazeEffect,
     OverlayFxEffect,
+    PendulumSwingEffect,
     RotatePartEffect,
     WaterfallFlowEffect,
     build_effect_pipeline,
@@ -254,13 +257,123 @@ class TestImageMotion(unittest.TestCase):
                 ("snow", {"count": 30, "opacity": 0.6}),
                 ("warm_glow", {"anchors": [[0.2, 0.3]], "radius": 0.15, "opacity": 0.6}),
                 ("sunbeam", {"opacity": 0.5}),
+                ("star_twinkle", {"count": 24, "opacity": 0.7}),
+                ("fireflies", {"count": 16, "opacity": 0.8}),
+                ("petal_leaf_drift", {"count": 20, "opacity": 0.8, "mode": "petal"}),
+                ("aurora_veil", {"opacity": 0.6}),
+                ("light_sweep", {"opacity": 0.7, "width": 0.15}),
             ):
                 eff = OverlayFxEffect(rgb, {"kind": kind, **extra})
                 f0 = eff.apply(rgb, 0.0, 5.0)
                 f1 = eff.apply(rgb, 1.0, 5.0)
-                peak = max(float(np.abs(eff.apply(rgb, u_test, 5.0) - f0).max()) for u_test in (0.125, 0.25, 0.375))
+                peak = max(float(np.abs(eff.apply(rgb, u_test, 5.0) - f0).max()) for u_test in (0.125, 0.25, 0.375, 0.5))
                 self.assertLess(float(np.abs(f1 - f0).mean()), 0.1, f"{kind} loop seam failed")
                 self.assertGreater(peak, 1.0, f"{kind} showed no motion")
+
+    def test_fire_flicker_heat_haze_and_pendulum_swing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = Path(tmp)
+            img_path = tmp_p / "scene.png"
+            rgb = _make_synthetic_landscape(img_path)
+            h, w = rgb.shape[:2]
+
+            # 1) FireFlicker: flame base pinned, tips move, loop-seamless
+            fire = FireFlickerEffect(
+                rgb,
+                {
+                    "rects": [[0.40, 0.65, 0.55, 0.85]],
+                    "edge_snap": False,
+                    "amplitude": 3.0,
+                    "flicker": 0.3,
+                },
+            )
+            f0 = fire.apply(rgb, 0.0, 4.0)
+            f_q = fire.apply(rgb, 0.25, 4.0)
+            f1 = fire.apply(rgb, 1.0, 4.0)
+            self.assertLess(float(np.abs(f1 - f0).mean()), 0.05)
+            self.assertGreater(float(np.abs(f_q - f0).max()), 1.5)
+            # Flame base row y = int(0.85 * h) has near-zero movement vs flame tip y = int(0.68 * h)
+            base_y = int(0.85 * h)
+            tip_y = int(0.68 * h)
+            x_slice = slice(int(0.42 * w), int(0.53 * w))
+            base_diff = float(np.max(np.abs(f_q[base_y, x_slice] - f0[base_y, x_slice])))
+            tip_diff = float(np.max(np.abs(f_q[tip_y, x_slice] - f0[tip_y, x_slice])))
+            self.assertLess(base_diff, 0.05)
+            self.assertGreater(tip_diff, 1.5)
+
+            # 2) HeatHaze: transparent refraction, loop-seamless
+            haze = HeatHazeEffect(
+                rgb,
+                {
+                    "rects": [[0.10, 0.10, 0.40, 0.40]],
+                    "edge_snap": False,
+                    "amplitude": 2.0,
+                    "frequency": 1.5,
+                },
+            )
+            h0 = haze.apply(rgb, 0.0, 4.0)
+            h_q = haze.apply(rgb, 0.25, 4.0)
+            h1 = haze.apply(rgb, 1.0, 4.0)
+            self.assertLess(float(np.abs(h1 - h0).mean()), 0.05)
+            self.assertGreater(float(np.abs(h_q - h0).max()), 0.8)
+
+            # 3) PendulumSwing: pivot point absolutely pinned, tip swings, loop-seamless
+            pivot = [0.82, 0.70]
+            pend = PendulumSwingEffect(
+                rgb,
+                {
+                    "rects": [[0.72, 0.72, 0.92, 0.82]],
+                    "pivot": pivot,
+                    "angle": 4.0,
+                    "edge_snap": False,
+                },
+            )
+            p0 = pend.apply(rgb, 0.0, 4.0)
+            p_q = pend.apply(rgb, 0.25, 4.0)
+            p1 = pend.apply(rgb, 1.0, 4.0)
+            self.assertLess(float(np.abs(p1 - p0).mean()), 0.05)
+            self.assertGreater(float(np.abs(p_q - p0).max()), 2.0)
+            # Pivot pixel stays strictly pinned
+            py, px = int(pivot[1] * h), int(pivot[0] * w)
+            self.assertLess(float(np.abs(p_q[py, px] - p0[py, px]).max()), 0.05)
+
+            # 4) Test direct alias pipeline instantiation
+            direct_plan = [
+                {"type": "star_twinkle", "count": 10},
+                {"type": "fireflies", "count": 8},
+                {"type": "aurora_veil"},
+                {"type": "petal_leaf_drift", "mode": "leaf"},
+                {"type": "light_sweep", "angle": 30.0},
+            ]
+            pipeline = build_effect_pipeline(rgb, direct_plan)
+            self.assertEqual(len(pipeline), 5)
+
+            # 5) Integration test rendering new effects with render_motion
+            ffmpeg_exe, _ = resolve_ffmpeg("ffmpeg")
+            if ffmpeg_exe:
+                out_mp4 = tmp_p / "new_fx.mp4"
+                rep = render_motion(
+                    image_path=img_path,
+                    plan_data={
+                        "effects": [
+                            {"type": "fire_flicker", "rects": [[0.40, 0.65, 0.55, 0.85]], "edge_snap": False},
+                            {"type": "heat_haze", "rects": [[0.10, 0.10, 0.40, 0.35]], "edge_snap": False},
+                            {"type": "pendulum_swing", "rects": [[0.72, 0.72, 0.92, 0.82]], "pivot": [0.82, 0.70], "edge_snap": False},
+                            {"type": "star_twinkle", "count": 12},
+                        ],
+                    },
+                    output_mp4=out_mp4,
+                    duration=0.5,
+                    fps=10,
+                    min_width=320,
+                    max_width=480,
+                    ffmpeg_exe=ffmpeg_exe,
+                    preview_dir=tmp_p / "masks",
+                )
+                self.assertEqual(rep["full_decode"], "passed")
+                self.assertTrue((tmp_p / "masks" / "mask_0_PendulumSwingEffect.png").is_file())
+                self.assertTrue((tmp_p / "masks" / "mask_1_FireFlickerEffect.png").is_file())
+                self.assertTrue((tmp_p / "masks" / "mask_2_HeatHazeEffect.png").is_file())
 
     def test_rotate_part_max_y_and_static_recovery(self):
         with tempfile.TemporaryDirectory() as tmp:

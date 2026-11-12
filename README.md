@@ -13,7 +13,7 @@
 | [bilingual-article-teaching](skills/bilingual-article-teaching/SKILL.md) | 将英语文章整理为逐句双语学习稿，核对词组高亮、语法提示和易混词，可导出 Word 与字幕标注稿。 |
 | [country-study-video](skills/country-study-video/SKILL.md) | 从国家名制作六年级英语双语介绍视频，默认按六年级水平优化教学稿，再制作配音与字幕。 |
 | [bilingual-study-subtitles](skills/bilingual-study-subtitles/SKILL.md) | 根据录音与中英稿件制作 ASS/SRT 学习字幕，支持重点词高亮、语法提示和字幕烧录。 |
-| [image-motion](skills/image-motion/SKILL.md) | 分析单张静态图片并通过边缘吸附算法生成克制、无缝循环的微动态 MP4/WebP 视频（湖海波纹、瀑布溪流、飘云、旗帜飘动、风车旋转、草木微风、热气光斑、3%～5% 微推进、刚体锁定，并支持可选 Depth Anything V2 深度图推理）。 |
+| [image-motion](skills/image-motion/SKILL.md) | 分析单张静态图片并通过边缘吸附算法生成克制、无缝循环的微动态 MP4/WebP 视频（支持水波、瀑布流、飘云、旗帜横幅、风车旋转、草木风摆、火焰微动、热浪折射、钟摆招牌、星光闪烁、萤火虫、落樱落叶、极光光幔、微光扫掠、透明氛围层、3%～5% 2.5D微推进与刚体锁定，并支持可选 Depth Anything V2 深度推理）。 |
 
 制作国家介绍时，将 country-study-video、bilingual-article-teaching、teaching-slideshow-video 和 bilingual-study-subtitles 并排安装。依赖和字体配置见[环境说明](skills/teaching-slideshow-video/references/portability.md)。
 

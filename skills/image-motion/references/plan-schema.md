@@ -74,16 +74,37 @@
    - `mode`: `"blades"`（自动用局部中值滤波分离细长扇叶并保留后方流动天空/背景）或 `"disc"`（整体羽化圆盘旋转）。
    - `blade_tone`: `"bright" | "dark" | "any"`（仅 `"blades"` 模式生效，默认 `"bright"`）；可选 `max_y` 限制扇叶以下支撑立柱不随旋转变形。
 
-5. **`overlay_fx`**（透明氛围层）
-   - `kind`:
-     - `"steam"`：热气上升，需传 `anchors: [[x, y], ...]` 与可选 `scale`。
-     - `"sun_motes"`：暖色阳光光斑/浮尘，`count`（默认 `22`）。
-     - `"warm_glow"`：灯火/烛光呼吸光晕，传 `anchors` 与 `radius`。
-     - `"sunbeam"`：斜向柔光光束脉冲。
-     - `"rain"` / `"snow"`：轻度细雨或飘雪，`count`。
-   - `opacity`：透明度（`0.0 ~ 1.0`）。
+7. **`fire_flicker`**（篝火 / 蜡烛 / 火把 / 挂灯火焰与色温微调）
+   - `polygons` / `rects`：火焰与焰舌区域，`edge_snap` 默认开启。
+   - 底部物理锚定：根部（木柴/烛芯接触面）垂直位移严格为 `0.0`，焰尖随高度向上递增湍流与摆动。
+   - `amplitude`（横向摆幅，默认 `2.5`）、`turbulence`（焰舌高频卷动，默认 `1.2`）、`flicker`（色温与明暗微调，默认 `0.22`，波峰时自动微增暖红/琥珀光色温）、`speed`（整数循环倍速，默认 `2`）。
 
-6. **`depth_parallax`**（3%～5% 温和空间微推进）
+8. **`heat_haze`**（热浪 / 沙漠蜃景 / 柏油路面 / 烟囱或火焰上方热空气折射）
+   - `polygons` / `rects`：热空气扰动区域，边缘采用高斯平滑羽化，边界自然过渡。
+   - 纯透明空气折射：不改变原图色彩，仅通过亚像素级高频波动连续对流扰动背景。
+   - `amplitude`（折射位移像素，默认 `1.2`）、`frequency`（空间波纹密度，默认 `1.0`）、`speed`（整数循环倍速，默认 `2`）。
+
+9. **`pendulum_swing`**（挂灯 / 悬挂招牌 / 吊钟 / 风铃 / 秋千微摆动）
+   - `polygons` / `rects`：摆动部件区域；`pivot`: `[px, py]` 顶部悬挂支点坐标。
+   - 支点绝对锁定：支点像素位移严格为 `0.0`，远离支点端按单摆谐振正弦波动 `\theta(u)` 旋转。
+   - 自动背景复原：摆动时自动根据遮罩外围背景像素外扩填补原位背底，无抠图空洞。
+   - `angle`（最大摆动角度度数，默认 `2.2`）、`speed`（整数循环周期，默认 `1`）、`damp_flex`（非刚体柔性弯曲程度，默认 `0.0`，绳索/缎带可设如 `0.3`）。
+
+10. **`overlay_fx`**（透明氛围与粒子流转层，支持作为 `type: "overlay_fx"` 或直接写顶级动效名）
+    - `kind`:
+      - `"steam"`：热气上升，需传 `anchors: [[x, y], ...]` 与可选 `scale`。
+      - `"sun_motes"`：暖色阳光光斑/浮尘，`count`（默认 `22`）。
+      - `"warm_glow"`：灯火/烛光呼吸光晕，传 `anchors` 与 `radius`。
+      - `"sunbeam"`：斜向柔光光束脉冲。
+      - `"rain"` / `"snow"`：轻度细雨或飘雪，`count`。
+      - `"star_twinkle"`（支持直接 `type: "star_twinkle"`）：夜空繁星/城市远景窗火呼吸；支持自动识别区域内高光星点或传入 `anchors`，波峰时自动触发十字衍射光芒芒刺。
+      - `"fireflies"`（支持直接 `type: "fireflies"`）：夏夜密林萤火虫；平滑三维利萨如（Lissajous）空间漫游轨迹与呼吸闪烁，黄绿暖光晕。
+      - `"petal_leaf_drift"`（支持直接 `type: "petal_leaf_drift"`）：落樱/花瓣/落叶飘落；带有 3D 俯仰翻滚翻面投影（aspect ratio 呼吸）与风向侧向摆动，垂直无缝循环环绕；支持 `mode: "petal" | "leaf" | "green"` 或自定义 `color`。
+      - `"aurora_veil"`（支持直接 `type: "aurora_veil"`）：极光光幔/晚霞流光；翡翠绿至紫红垂直渐变光幕，横向折叠波浪与垂直光线纹理柔和流动。
+      - `"light_sweep"`（支持直接 `type: "light_sweep"`）：斜向高光流转/微光扫掠；高斯截面丝滑高光带横扫特定金属/徽标/水面区域，奢华质感，首尾绝对平滑归零无跳跃。
+    - `opacity`：透明度（`0.0 ~ 1.0`）。
+
+11. **`depth_parallax`**（3%～5% 温和空间微推进）
    - **Step 1（无需外部模型）**：按 `horizon_y`（天际线高度）、`sky_depth`（默认 `0.05`）、`horizon_depth`（默认 `0.25`）、`bottom_depth`（默认 `0.92`）构建平滑斜坡深度场，并可附带 `foreground_regions: [{"polygons": [...], "depth": 0.92}]`（默认走 `edge_snap` 贴合主体边缘）。
    - **Step 2（已接入 Depth Anything V2 / 外部深度图）**：
      - 命令行可加 `--auto-depth`（支持 `--depth-backend auto|onnx|transformers`、`--onnx-path`、`--depth-model`、`--depth-input-size`、`--depth-out`）自动推算灰度深度图并接入 `depth_parallax`；也可先用 `scripts/estimate_depth.py` 单独生成后再传 `"depth_map": "path/to/depth.png"` 或 `--depth-map`。

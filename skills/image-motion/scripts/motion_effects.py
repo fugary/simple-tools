@@ -704,6 +704,254 @@ class RotatePartEffect(MotionEffect):
         return out
 
 
+class FireFlickerEffect(MotionEffect):
+    """Campfire, candle, torch, or lantern flame flicker with upward turbulence and warm color pulsation."""
+
+    def __init__(self, base_rgb: np.ndarray, cfg: dict[str, Any]):
+        h, w, _ = base_rgb.shape
+        polys, rects, exc_polys, exc_rects = _normalize_region_args(cfg)
+        self.mask = build_region_mask(
+            base_rgb,
+            polygons=polys,
+            rects=rects,
+            exclude_polygons=exc_polys,
+            exclude_rects=exc_rects,
+            edge_snap=cfg.get("edge_snap", True),
+            snap_radius=float(cfg.get("snap_radius", 0.025)),
+            feather_px=float(cfg.get("feather_px", 2.0)),
+        )
+        ys, xs = np.where(self.mask > 0.01)
+        if len(ys) == 0:
+            self.active = False
+            return
+        self.active = True
+        self.y0 = max(0, int(ys.min()) - 4)
+        self.y1 = min(h, int(ys.max()) + 4)
+        self.x0 = max(0, int(xs.min()) - 4)
+        self.x1 = min(w, int(xs.max()) + 4)
+        yy, xx = np.mgrid[self.y0:self.y1, self.x0:self.x1].astype(np.float32)
+        self.xx_rel = xx - float(self.x0)
+        self.yy_rel = yy - float(self.y0)
+        self.xx = xx
+        self.yy = yy
+
+        scale_ref = min(w, h) / 772.0
+        self.amp = float(cfg.get("amplitude", 2.5)) * scale_ref
+        self.turbulence = float(cfg.get("turbulence", 1.2)) * scale_ref
+        self.flicker = float(np.clip(cfg.get("flicker", 0.22), 0.0, 0.6))
+        self.speed = max(1, int(round(float(cfg.get("speed", 2.0)))))
+
+        mask_crop = self.mask[self.y0:self.y1, self.x0:self.x1]
+        self.m_sub = mask_crop[..., None]
+        self.valid_sub = (mask_crop > 0.05)[..., None]
+
+        span_y = max(float(ys.max() - ys.min()), 8.0)
+        rise = np.clip((float(ys.max()) - yy) / span_y, 0.0, 1.0)
+        self.rise_env = np.power(rise, 1.6) * mask_crop
+
+        pad_px = max(5, int(math.ceil((abs(self.amp) + abs(self.turbulence)) * 2.0)) + 3)
+        self.ext_fire = extend_masked_pixels(base_rgb[self.y0:self.y1, self.x0:self.x1], mask_crop, pad_px)
+
+    def apply(self, frame: np.ndarray, u: float, duration: float) -> np.ndarray:
+        if not self.active:
+            return frame
+        tau = 2.0 * math.pi * u * self.speed
+        warp_x = self.rise_env * (
+            self.amp * np.sin(0.08 * self.yy - tau + 0.3)
+            + self.turbulence * np.sin(0.18 * self.yy + 0.12 * self.xx - 2.0 * tau + 1.2)
+            + (self.turbulence * 0.5) * np.sin(-0.28 * self.yy - 3.0 * tau)
+        )
+        warp_y = self.rise_env * (
+            (self.amp * 0.4) * np.cos(0.06 * self.xx - tau)
+            - (self.turbulence * 0.6) * np.abs(np.sin(0.15 * self.yy - 2.0 * tau))
+        )
+        sub = frame[self.y0:self.y1, self.x0:self.x1]
+        src = np.where(self.valid_sub, sub, self.ext_fire)
+        sampled = bilinear_sample(src, self.xx_rel + warp_x, self.yy_rel + warp_y)
+
+        if self.flicker > 0.0:
+            pulse = (
+                0.6 * math.sin(tau)
+                + 0.3 * math.sin(2.0 * tau + 0.9)
+                + 0.2 * math.sin(3.0 * tau + 2.1)
+            )
+            tint_delta = np.zeros_like(sampled)
+            tint_delta[..., 0] = 30.0 * pulse * self.flicker
+            tint_delta[..., 1] = 16.0 * pulse * self.flicker
+            tint_delta[..., 2] = -12.0 * pulse * self.flicker
+            sampled = np.clip(sampled + tint_delta * self.rise_env[..., None], 0.0, 255.0)
+
+        out = frame.copy()
+        out[self.y0:self.y1, self.x0:self.x1] = sub * (1.0 - self.m_sub) + sampled * self.m_sub
+        return out
+
+
+class HeatHazeEffect(MotionEffect):
+    """Transparent high-frequency convection refraction shimmer for deserts, hot roads, or fire exhaust."""
+
+    def __init__(self, base_rgb: np.ndarray, cfg: dict[str, Any]):
+        h, w, _ = base_rgb.shape
+        polys, rects, exc_polys, exc_rects = _normalize_region_args(cfg)
+        self.mask = build_region_mask(
+            base_rgb,
+            polygons=polys,
+            rects=rects,
+            exclude_polygons=exc_polys,
+            exclude_rects=exc_rects,
+            edge_snap=cfg.get("edge_snap", False),
+            feather_px=float(cfg.get("feather_px", 4.0)),
+        )
+        ys, xs = np.where(self.mask > 0.01)
+        if len(ys) == 0:
+            self.active = False
+            return
+        self.active = True
+        self.y0 = max(0, int(ys.min()) - 4)
+        self.y1 = min(h, int(ys.max()) + 4)
+        self.x0 = max(0, int(xs.min()) - 4)
+        self.x1 = min(w, int(xs.max()) + 4)
+        yy, xx = np.mgrid[self.y0:self.y1, self.x0:self.x1].astype(np.float32)
+        self.xx_rel = xx - float(self.x0)
+        self.yy_rel = yy - float(self.y0)
+        self.xx = xx
+        self.yy = yy
+
+        scale_ref = min(w, h) / 772.0
+        self.amp = float(cfg.get("amplitude", 1.2)) * scale_ref
+        self.frequency = float(cfg.get("frequency", 1.0))
+        self.speed = max(1, int(round(float(cfg.get("speed", 2.0)))))
+
+        mask_crop = self.mask[self.y0:self.y1, self.x0:self.x1]
+        self.m_sub = mask_crop[..., None]
+        self.valid_sub = (mask_crop > 0.02)[..., None]
+
+        core_u8 = ((mask_crop > 0.6).astype(np.uint8)) * 255
+        damp_r = max(2.5, min(w, h) * 0.01)
+        edge_damp = (
+            np.array(Image.fromarray(core_u8).filter(ImageFilter.GaussianBlur(radius=damp_r)), dtype=np.float32)
+            / 255.0
+        )
+        self.haze_env = mask_crop * (0.2 + 0.8 * edge_damp)
+
+        pad_px = max(4, int(math.ceil(abs(self.amp) * 2.0)) + 2)
+        self.ext_haze = extend_masked_pixels(base_rgb[self.y0:self.y1, self.x0:self.x1], mask_crop, pad_px)
+
+    def apply(self, frame: np.ndarray, u: float, duration: float) -> np.ndarray:
+        if not self.active:
+            return frame
+        tau = 2.0 * math.pi * u * self.speed
+        freq = self.frequency
+        phase_y = 0.22 * freq * self.yy - tau
+        dx = (self.amp * self.haze_env) * (
+            0.70 * np.sin(0.16 * freq * self.xx + phase_y)
+            + 0.30 * np.sin(-0.31 * freq * self.xx + 2.0 * phase_y + 1.4)
+        )
+        dy = (self.amp * 0.45 * self.haze_env) * (
+            0.65 * np.cos(0.12 * freq * self.xx + phase_y * 1.2)
+            + 0.35 * np.sin(0.25 * freq * self.xx - phase_y + 0.8)
+        )
+
+        sub = frame[self.y0:self.y1, self.x0:self.x1]
+        src = np.where(self.valid_sub, sub, self.ext_haze)
+        sampled = bilinear_sample(src, self.xx_rel + dx, self.yy_rel + dy)
+        out = frame.copy()
+        out[self.y0:self.y1, self.x0:self.x1] = sub * (1.0 - self.m_sub) + sampled * self.m_sub
+        return out
+
+
+class PendulumSwingEffect(MotionEffect):
+    """Subtle harmonic oscillation for hanging lanterns, signs, bells, windchimes, or swings."""
+
+    def __init__(self, base_rgb: np.ndarray, cfg: dict[str, Any]):
+        h, w, _ = base_rgb.shape
+        polys, rects, exc_polys, exc_rects = _normalize_region_args(cfg)
+        self.mask = build_region_mask(
+            base_rgb,
+            polygons=polys,
+            rects=rects,
+            exclude_polygons=exc_polys,
+            exclude_rects=exc_rects,
+            edge_snap=cfg.get("edge_snap", True),
+            snap_radius=float(cfg.get("snap_radius", 0.025)),
+            feather_px=float(cfg.get("feather_px", 1.8)),
+        )
+        ys, xs = np.where(self.mask > 0.01)
+        if len(ys) == 0:
+            self.active = False
+            return
+        self.active = True
+
+        pivot_n = cfg.get("pivot", cfg.get("center", [float(xs.mean()) / w, float(ys.min()) / h]))
+        self.px = float(pivot_n[0]) * w
+        self.py = float(pivot_n[1]) * h
+
+        self.angle_deg = float(cfg.get("angle", 2.2))
+        self.max_rad = math.radians(self.angle_deg)
+        self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+        self.damp_flex = float(cfg.get("damp_flex", 0.0))
+
+        max_dist = max(
+            math.hypot(float(xs.min()) - self.px, float(ys.min()) - self.py),
+            math.hypot(float(xs.max()) - self.px, float(ys.max()) - self.py),
+            math.hypot(float(xs.min()) - self.px, float(ys.max()) - self.py),
+            math.hypot(float(xs.max()) - self.px, float(ys.min()) - self.py),
+        )
+        self.max_dist = max(max_dist, 10.0)
+        margin = int(math.ceil(self.max_dist * math.sin(abs(self.max_rad)))) + 6
+
+        self.y0 = max(0, int(min(ys.min(), self.py)) - margin)
+        self.y1 = min(h, int(max(ys.max(), self.py)) + margin)
+        self.x0 = max(0, int(min(xs.min(), self.px)) - margin)
+        self.x1 = min(w, int(max(xs.max(), self.px)) + margin)
+
+        yy, xx = np.mgrid[self.y0:self.y1, self.x0:self.x1].astype(np.float32)
+        self.dx = xx - self.px
+        self.dy = yy - self.py
+        self.dist = np.sqrt(self.dx * self.dx + self.dy * self.dy)
+        self.dist_ratio = np.clip(self.dist / self.max_dist, 0.0, 1.0)
+
+        mask_crop = self.mask[self.y0:self.y1, self.x0:self.x1]
+        self.fg_alpha = mask_crop[..., None]
+
+        pad_px = max(6, margin + 4)
+        bg_mask = (mask_crop < 0.1).astype(np.float32)
+        self.clean_bg = extend_masked_pixels(base_rgb[self.y0:self.y1, self.x0:self.x1], bg_mask, pad_px)
+        self.fg_rgb = extend_masked_pixels(base_rgb[self.y0:self.y1, self.x0:self.x1], mask_crop, pad_px=4)
+
+        self.xx_rel = xx - float(self.x0)
+        self.yy_rel = yy - float(self.y0)
+        self.px_rel = self.px - float(self.x0)
+        self.py_rel = self.py - float(self.y0)
+
+    def apply(self, frame: np.ndarray, u: float, duration: float) -> np.ndarray:
+        if not self.active:
+            return frame
+        tau = 2.0 * math.pi * u * self.speed
+        theta = self.max_rad * math.sin(tau)
+        if abs(theta) < 1e-6:
+            return frame
+
+        if self.damp_flex > 0.0:
+            theta_local = theta * np.power(self.dist_ratio, 1.0 + self.damp_flex)
+            cos_t = np.cos(-theta_local)
+            sin_t = np.sin(-theta_local)
+        else:
+            cos_t = math.cos(-theta)
+            sin_t = math.sin(-theta)
+
+        rx = self.px_rel + (self.xx_rel - self.px_rel) * cos_t - (self.yy_rel - self.py_rel) * sin_t
+        ry = self.py_rel + (self.xx_rel - self.px_rel) * sin_t + (self.yy_rel - self.py_rel) * cos_t
+
+        rot_rgb = bilinear_sample(self.fg_rgb, rx, ry)
+        rot_a = bilinear_sample(self.fg_alpha, rx, ry)
+
+        sub = frame[self.y0:self.y1, self.x0:self.x1]
+        bg_blend = sub * (1.0 - self.fg_alpha) + self.clean_bg * self.fg_alpha
+        out = frame.copy()
+        out[self.y0:self.y1, self.x0:self.x1] = bg_blend * (1.0 - rot_a) + rot_rgb * rot_a
+        return out
+
+
 class DepthParallaxEffect(MotionEffect):
     """Gentle 3%-5% 2.5D spatial camera push/orbit from synthetic depth or external depth_map."""
 
@@ -757,11 +1005,23 @@ class DepthParallaxEffect(MotionEffect):
         return bilinear_sample(frame, sx, sy)
 
 
-VALID_OVERLAY_KINDS = {"steam", "sun_motes", "warm_glow", "sunbeam", "rain", "snow"}
+VALID_OVERLAY_KINDS = {
+    "steam",
+    "sun_motes",
+    "warm_glow",
+    "sunbeam",
+    "rain",
+    "snow",
+    "star_twinkle",
+    "fireflies",
+    "petal_leaf_drift",
+    "aurora_veil",
+    "light_sweep",
+}
 
 
 class OverlayFxEffect(MotionEffect):
-    """Seamless procedural overlays: steam, sun_motes, warm_glow, sunbeam, rain, snow."""
+    """Seamless procedural overlays: steam, sun_motes, warm_glow, sunbeam, rain, snow, star_twinkle, fireflies, petal_leaf_drift, aurora_veil, light_sweep."""
 
     def __init__(self, base_rgb: np.ndarray, cfg: dict[str, Any]):
         self.h, self.w, _ = base_rgb.shape
@@ -828,6 +1088,124 @@ class OverlayFxEffect(MotionEffect):
                 )
                 for _ in range(count)
             ]
+        elif self.kind == "star_twinkle":
+            self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+            self.star_color = np.array(cfg.get("color", [255.0, 250.0, 225.0]), dtype=np.float32)
+            self.has_spikes = bool(cfg.get("spikes", True))
+            raw_anchors = cfg.get("anchors")
+            rng = np.random.default_rng(int(cfg.get("seed", 42)))
+            if raw_anchors:
+                points = [(float(a[0]) * self.w, float(a[1]) * self.h) for a in raw_anchors]
+            else:
+                count = int(cfg.get("count", 32))
+                luma = (0.299 * base_rgb[..., 0] + 0.587 * base_rgb[..., 1] + 0.114 * base_rgb[..., 2]) / 255.0
+                active = (self.allow_mask[..., 0] > 0.4) if self.allow_mask is not None else np.ones((self.h, self.w), dtype=bool)
+                thresh = float(cfg.get("luma_threshold", 0.65))
+                cands = np.argwhere(active & (luma > thresh))
+                if len(cands) >= 8:
+                    chosen_idx = rng.choice(len(cands), size=min(count, len(cands)), replace=False)
+                    points = [(float(cands[i][1]), float(cands[i][0])) for i in chosen_idx]
+                else:
+                    active_ys, active_xs = np.where(active)
+                    if len(active_ys) > 0:
+                        chosen_idx = rng.choice(len(active_ys), size=min(count, len(active_ys)), replace=False)
+                        points = [(float(active_xs[i]), float(active_ys[i])) for i in chosen_idx]
+                    else:
+                        points = [(float(rng.uniform(0.05, 0.95) * self.w), float(rng.uniform(0.05, 0.55) * self.h)) for _ in range(count)]
+            scale_ref = min(self.w, self.h) / 720.0
+            self.stars = [
+                (
+                    px,
+                    py,
+                    float(rng.uniform(1.2, 3.2) * scale_ref),
+                    int(rng.integers(1, 4)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    float(rng.uniform(0.6, 1.2)),
+                    bool(rng.uniform(0.0, 1.0) > 0.35) if self.has_spikes else False,
+                )
+                for px, py in points
+            ]
+        elif self.kind == "fireflies":
+            self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+            self.fly_color = np.array(cfg.get("color", [215.0, 255.0, 110.0]), dtype=np.float32)
+            rng = np.random.default_rng(int(cfg.get("seed", 55)))
+            count = int(cfg.get("count", 24))
+            scale_ref = min(self.w, self.h) / 720.0
+            active = (self.allow_mask[..., 0] > 0.3) if self.allow_mask is not None else np.ones((self.h, self.w), dtype=bool)
+            active_ys, active_xs = np.where(active)
+            if len(active_ys) > count:
+                chosen = rng.choice(len(active_ys), size=count, replace=False)
+                base_pts = [(float(active_xs[i]), float(active_ys[i])) for i in chosen]
+            else:
+                base_pts = [
+                    (float(rng.uniform(0.1, 0.9) * self.w), float(rng.uniform(0.2, 0.9) * self.h))
+                    for _ in range(count)
+                ]
+            self.fireflies = [
+                (
+                    bx,
+                    by,
+                    float(rng.uniform(5.0, 12.0) * scale_ref),
+                    float(rng.uniform(14.0, 38.0) * scale_ref),
+                    float(rng.uniform(10.0, 28.0) * scale_ref),
+                    int(rng.integers(1, 3)),
+                    int(rng.integers(1, 3)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    int(rng.integers(2, 5)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    float(rng.uniform(0.7, 1.2)),
+                )
+                for bx, by in base_pts
+            ]
+        elif self.kind == "petal_leaf_drift":
+            self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+            self.wind_drift = float(cfg.get("wind", 0.22)) * self.w * 0.15
+            mode = cfg.get("mode", "petal")
+            default_color = [255.0, 212.0, 224.0] if mode == "petal" else ([235.0, 145.0, 50.0] if mode == "leaf" else [130.0, 210.0, 85.0])
+            self.part_color = np.array(cfg.get("color", default_color), dtype=np.float32)
+            rng = np.random.default_rng(int(cfg.get("seed", 33)))
+            count = int(cfg.get("count", 28))
+            scale_ref = min(self.w, self.h) / 720.0
+            self.drift_parts = [
+                (
+                    float(rng.uniform(0.0, 1.0) * self.w),
+                    float(rng.uniform(0.0, 1.0) * self.h),
+                    float(rng.uniform(4.5, 9.5) * scale_ref),
+                    float(rng.uniform(0.40, 0.65)),
+                    int(rng.integers(1, 4)),
+                    float(rng.uniform(12.0, 32.0) * scale_ref),
+                    int(rng.integers(1, 3)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    int(rng.integers(1, 4)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                    int(rng.integers(2, 5)),
+                    float(rng.uniform(0.0, 2.0 * math.pi)),
+                )
+                for _ in range(count)
+            ]
+        elif self.kind == "aurora_veil":
+            self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+            self.color_bottom = np.array(cfg.get("color_bottom", [80.0, 255.0, 160.0]), dtype=np.float32)
+            self.color_top = np.array(cfg.get("color_top", [185.0, 80.0, 255.0]), dtype=np.float32)
+            self.curtain_y0 = float(cfg.get("top_y", 0.02)) * self.h
+            self.curtain_y1 = float(cfg.get("bottom_y", 0.65)) * self.h
+        elif self.kind == "light_sweep":
+            self.speed = max(1, int(round(float(cfg.get("speed", 1.0)))))
+            self.sweep_color = np.array(cfg.get("color", [255.0, 255.0, 245.0]), dtype=np.float32)
+            ang_deg = float(cfg.get("angle", 45.0))
+            ang_rad = math.radians(ang_deg)
+            self.cos_a = math.cos(ang_rad)
+            self.sin_a = math.sin(ang_rad)
+            self.proj = self.xx * self.cos_a + self.yy * self.sin_a
+            if self.allow_mask is not None and np.any(self.allow_mask > 0.05):
+                active_p = self.proj[self.allow_mask[..., 0] > 0.05]
+                p_min, p_max = float(active_p.min()), float(active_p.max())
+            else:
+                p_min, p_max = float(self.proj.min()), float(self.proj.max())
+            self.band_w = max(24.0, float(cfg.get("width", 0.14)) * min(self.w, self.h))
+            self.p_start = p_min - self.band_w * 2.2
+            self.p_end = p_max + self.band_w * 2.2
 
     def apply(self, frame: np.ndarray, u: float, duration: float) -> np.ndarray:
         tau = 2.0 * math.pi * u
@@ -968,6 +1346,133 @@ class OverlayFxEffect(MotionEffect):
                 alpha *= self.allow_mask
             out = np.clip(out + 225.0 * alpha, 0.0, 255.0)
 
+        elif self.kind == "star_twinkle":
+            stars_layer = np.zeros((self.h, self.w), dtype=np.float32)
+            tau_speed = tau * self.speed
+            for px, py, rad, cyc, phase, bright, has_spike in self.stars:
+                pulse = (0.5 + 0.5 * math.sin(cyc * tau_speed + phase)) ** 2.2
+                if pulse < 0.04:
+                    continue
+                reach = int(math.ceil(rad * 3.0))
+                x0, x1 = max(0, int(px - reach)), min(self.w, int(px + reach) + 1)
+                y0, y1 = max(0, int(py - reach)), min(self.h, int(py + reach) + 1)
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                xx_s = self.xx[y0:y1, x0:x1]
+                yy_s = self.yy[y0:y1, x0:x1]
+                d2 = (xx_s - px) ** 2 + (yy_s - py) ** 2
+                star = np.exp(-d2 / (2.0 * rad ** 2)) * pulse * bright
+                if has_spike and pulse > 0.60:
+                    sp = np.exp(-np.abs(yy_s - py) / (rad * 0.55) - ((xx_s - px) ** 2) / 1.5) + np.exp(
+                        -np.abs(xx_s - px) / (rad * 0.55) - ((yy_s - py) ** 2) / 1.5
+                    )
+                    star += sp * ((pulse - 0.60) / 0.40) * (0.8 * bright)
+                stars_layer[y0:y1, x0:x1] += star
+            alpha = np.clip(stars_layer * (0.65 * self.opacity), 0.0, 0.95)[..., None]
+            if self.allow_mask is not None:
+                alpha *= self.allow_mask
+            out = np.clip(out + self.star_color * alpha, 0.0, 255.0)
+
+        elif self.kind == "fireflies":
+            glow_layer = np.zeros((self.h, self.w), dtype=np.float32)
+            tau_speed = tau * self.speed
+            for bx, by, rad, dx_amp, dy_amp, cx_c, cy_c, ph_x, ph_y, blk_c, blk_ph, br in self.fireflies:
+                blink = (max(0.0, math.sin(blk_c * tau_speed + blk_ph))) ** 2.4
+                if blink < 0.02:
+                    continue
+                cx = bx + dx_amp * math.sin(cx_c * tau_speed + ph_x)
+                cy = by + dy_amp * math.cos(cy_c * tau_speed + ph_y)
+                reach = int(math.ceil(rad * 2.8))
+                x0, x1 = max(0, int(cx - reach)), min(self.w, int(cx + reach) + 1)
+                y0, y1 = max(0, int(cy - reach)), min(self.h, int(cy + reach) + 1)
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                xx_s = self.xx[y0:y1, x0:x1]
+                yy_s = self.yy[y0:y1, x0:x1]
+                d2 = (xx_s - cx) ** 2 + (yy_s - cy) ** 2
+                orb = np.exp(-d2 / (2.0 * rad ** 2)) * blink * br
+                orb += np.exp(-d2 / 2.5) * blink * (1.6 * br)
+                glow_layer[y0:y1, x0:x1] += orb
+            alpha = np.clip(glow_layer * (0.55 * self.opacity), 0.0, 0.9)[..., None]
+            if self.allow_mask is not None:
+                alpha *= self.allow_mask
+            out = np.clip(out + self.fly_color * alpha, 0.0, 255.0)
+
+        elif self.kind == "petal_leaf_drift":
+            part_layer = np.zeros((self.h, self.w), dtype=np.float32)
+            for (
+                bx,
+                by,
+                size,
+                aspect,
+                cyc_y,
+                sway_amp,
+                sway_cyc,
+                ph_sway,
+                rot_spd,
+                ph_rot,
+                flp_spd,
+                ph_flp,
+            ) in self.drift_parts:
+                cy_base = (by + u * cyc_y * self.h * self.speed) % self.h
+                cx_base = (bx + sway_amp * math.sin(sway_cyc * tau + ph_sway) + self.wind_drift * math.sin(tau)) % self.w
+                rot = rot_spd * tau + ph_rot
+                cos_r, sin_r = math.cos(rot), math.sin(rot)
+                tilt = max(0.20, abs(math.cos(flp_spd * tau + ph_flp)))
+                a = size
+                b = max(1.2, size * aspect * tilt)
+                r_box = int(math.ceil(size * 1.6)) + 2
+
+                for cy in (cy_base, cy_base - self.h, cy_base + self.h):
+                    if cy + r_box < 0 or cy - r_box >= self.h:
+                        continue
+                    for cx in (cx_base, cx_base - self.w, cx_base + self.w):
+                        if cx + r_box < 0 or cx - r_box >= self.w:
+                            continue
+                        x0, x1 = max(0, int(cx - r_box)), min(self.w, int(cx + r_box) + 1)
+                        y0, y1 = max(0, int(cy - r_box)), min(self.h, int(cy + r_box) + 1)
+                        if x1 <= x0 or y1 <= y0:
+                            continue
+                        dx = self.xx[y0:y1, x0:x1] - cx
+                        dy = self.yy[y0:y1, x0:x1] - cy
+                        rx = dx * cos_r + dy * sin_r
+                        ry = -dx * sin_r + dy * cos_r
+                        d2 = (rx / a) ** 2 + (ry / b) ** 2
+                        p_mask = np.clip(1.0 - (d2 - 0.70) / 0.45, 0.0, 1.0)
+                        part_layer[y0:y1, x0:x1] = np.maximum(part_layer[y0:y1, x0:x1], p_mask)
+            alpha = np.clip(part_layer * (0.85 * self.opacity), 0.0, 0.95)[..., None]
+            if self.allow_mask is not None:
+                alpha *= self.allow_mask
+            out = out * (1.0 - alpha) + self.part_color * alpha
+
+        elif self.kind == "aurora_veil":
+            tau_speed = tau * self.speed
+            span_y = max(self.curtain_y1 - self.curtain_y0, 20.0)
+            y_rel = np.clip((self.yy - self.curtain_y0) / span_y, 0.0, 1.0)
+            fade_y = np.sin(math.pi * np.power(y_rel, 0.82)) * (self.yy >= self.curtain_y0) * (self.yy <= self.curtain_y1)
+            wave1 = np.sin(0.012 * self.xx + 0.006 * self.yy - tau_speed)
+            wave2 = np.sin(0.026 * self.xx - 0.015 * self.yy - 2.0 * tau_speed + 1.2)
+            rays = 0.58 + 0.42 * np.sin(0.082 * self.xx + wave1 * 3.0 + tau_speed)
+            curtain = np.power(np.clip(0.5 + 0.5 * (wave1 * 0.72 + wave2 * 0.28), 0.0, 1.0), 2.1) * rays * fade_y
+            c_bot = self.color_bottom[None, None, :]
+            c_top = self.color_top[None, None, :]
+            color_field = c_top * (1.0 - y_rel[..., None]) + c_bot * y_rel[..., None]
+            alpha = np.clip(curtain * (0.42 * self.opacity), 0.0, 0.8)[..., None]
+            if self.allow_mask is not None:
+                alpha *= self.allow_mask
+            out = np.clip(out + color_field * alpha, 0.0, 255.0)
+
+        elif self.kind == "light_sweep":
+            u_cycle = (u * self.speed) % 1.0
+            sweep_p = self.p_start + u_cycle * (self.p_end - self.p_start)
+            dist = np.abs(self.proj - sweep_p)
+            glow = np.exp(-(dist ** 2) / (2.0 * (self.band_w * 0.42) ** 2))
+            temporal = math.sin(math.pi * u_cycle) ** 0.6
+            alpha = np.clip(glow * temporal * (0.45 * self.opacity), 0.0, 0.85)[..., None]
+            if self.allow_mask is not None:
+                alpha *= self.allow_mask
+            out = np.clip(out + self.sweep_color * alpha, 0.0, 255.0)
+
         return out
 
 
@@ -978,8 +1483,17 @@ EFFECT_FACTORIES = {
     "foliage_sway": FoliageSwayEffect,
     "flag_cloth_wave": FlagClothWaveEffect,
     "rotate_part": RotatePartEffect,
+    "fire_flicker": FireFlickerEffect,
+    "heat_haze": HeatHazeEffect,
+    "pendulum_swing": PendulumSwingEffect,
     "depth_parallax": DepthParallaxEffect,
     "overlay_fx": OverlayFxEffect,
+    # Direct type convenience aliases for overlay kinds
+    "star_twinkle": lambda base, cfg: OverlayFxEffect(base, {"kind": "star_twinkle", **cfg}),
+    "fireflies": lambda base, cfg: OverlayFxEffect(base, {"kind": "fireflies", **cfg}),
+    "petal_leaf_drift": lambda base, cfg: OverlayFxEffect(base, {"kind": "petal_leaf_drift", **cfg}),
+    "aurora_veil": lambda base, cfg: OverlayFxEffect(base, {"kind": "aurora_veil", **cfg}),
+    "light_sweep": lambda base, cfg: OverlayFxEffect(base, {"kind": "light_sweep", **cfg}),
 }
 
 
@@ -1021,6 +1535,9 @@ def build_effect_pipeline(
         "foliage_sway",
         "flag_cloth_wave",
         "rotate_part",
+        "fire_flicker",
+        "heat_haze",
+        "pendulum_swing",
     }
 
     prepared_cfg: list[dict[str, Any]] = []
@@ -1032,7 +1549,7 @@ def build_effect_pipeline(
                 cfg["exclude_polygons"] = list(cfg.get("exclude_polygons", ())) + static_polys
             if static_rects:
                 cfg["exclude_rects"] = list(cfg.get("exclude_rects", ())) + static_rects
-        elif etype == "overlay_fx":
+        elif etype in {"overlay_fx", "star_twinkle", "fireflies", "petal_leaf_drift", "aurora_veil", "light_sweep"}:
             if cfg.get("respect_static_regions", False) and (static_polys or static_rects):
                 if static_polys:
                     cfg["exclude_polygons"] = list(cfg.get("exclude_polygons", ())) + static_polys
@@ -1047,13 +1564,21 @@ def build_effect_pipeline(
 
     order_rank = {
         "sky_drift": 1,
+        "aurora_veil": 1.5,
         "foliage_sway": 2,
         "flag_cloth_wave": 2,
+        "pendulum_swing": 2.2,
+        "fire_flicker": 2.5,
         "water_ripple": 3,
         "waterfall_flow": 3,
+        "heat_haze": 3.5,
         "rotate_part": 4,
         "depth_parallax": 5,
+        "star_twinkle": 5.8,
         "overlay_fx": 6,
+        "fireflies": 6.2,
+        "petal_leaf_drift": 6.5,
+        "light_sweep": 7,
     }
     sorted_cfg = sorted(prepared_cfg, key=lambda c: order_rank.get(c.get("type", ""), 9))
     pipeline: list[MotionEffect] = []
