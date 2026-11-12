@@ -1,0 +1,4 @@
+interface:
+  display_name: "图片微动效"
+  short_description: "将任意静图全自动分析并转化为无抽卡的微动态循环视频（水波、瀑布、飘云、旗帜、旋转、热气光斑与2.5D推进）"
+  default_prompt: "用 $image-motion 为这张图片自动设计微动效并导出 5 秒无缝循环 MP4 视频。"

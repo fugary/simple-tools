@@ -1,0 +1,13 @@
+# Python 3.9+; install in a virtual environment.
+# Core Step 1 dependencies:
+Pillow>=9
+numpy>=1.22
+imageio-ffmpeg>=0.5
+
+# Optional Step 2 (Depth Anything V2) — install ONE backend when using --auto-depth:
+# Option A (lightweight, supports Apple Silicon CoreML / CUDA / CPU):
+#   onnxruntime>=1.16
+#   huggingface-hub>=0.20   # optional if using local --onnx-path / DEPTH_ANYTHING_ONNX
+# Option B (PyTorch + HuggingFace Transformers, supports MPS / CUDA / CPU):
+#   torch>=2.1
+#   transformers>=4.42
