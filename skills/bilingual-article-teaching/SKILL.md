@@ -44,12 +44,14 @@ description: 把英文文章、教材对话或已有双语学习稿整理成适�
 
 ```sh
 python scripts/study_cues.py cues.json
+python scripts/study_cues.py cues.json --strict --front-matter meta.json --groups 打印同页对照.json --word 学习稿.docx
 python scripts/study_cues.py cues.json --word 学习稿.docx --text 字幕标注稿.txt
 python scripts/study_cues.py cues.json --groups 打印同页对照.json --word 学习稿.docx
 python scripts/study_cues.py cues.json --check-narration
+python scripts/verify_pdf_handout.py 学习稿.pdf --export-from 学习稿.docx --cues cues.json --groups 打印同页对照.json
 ```
 
-第一条只核查。第二条从同一份数据导出带实际高亮和“要点”段落的 Word，以及使用 `【字幕标注】` JSON 行的可读文本。只请求一种格式时仅传对应选项。生成 Word 需要 python-docx。修订有定制版式的 Word 时，在原版式内更新相应条目；脚本的 Word 输出用于创建常规学习稿。导出的目标路径应是本次选定的成品路径。
+第一条只核查；加上 `--strict` 会启用严格语料校验（禁止英中高亮同句重复次数不一致、禁止同侧高亮区间重叠、拦截如 `is located` / `made up of` 或以孤立 `the`/`a`/`an`/`one of` 结尾的半截悬空搭配、弯撇号 `’`、省略号或 TODO 等开发残留；配合 `--front-matter` 时还将“难词表词汇在首现句 `notes` 中缺少音标或词性”列为硬性报错，并对超 25 词长句提示可读性复核）。传入 `lesson.json` 等含 `cues` 数组的对象也可直接识别。注意 `--word` 与 `--text` 均为**导出覆盖**参数而非校验参数：在定稿 `.docx` 已存在且仅需做终审只读复核时，**切勿传入 `--word`**（尤其不能遗漏 `--front-matter` 传入 `--word`，否则会用默认版式覆盖定制首页），只传 `--strict --groups` 即可。第三条从同一份数据导出带实际高亮和“要点”段落的 Word，以及使用 `【字幕标注】` JSON 行的可读文本。只请求一种格式时仅传对应选项。生成 Word 需要 python-docx。修订有定制版式的 Word 时，在原版式内更新相应条目；脚本的默认 Word 输出用于创建常规学习稿，需要带首页小档案、代表词组速查表与带音标核心词表的高级版式时，传入 `--front-matter meta.json`（含 `facts`、`quick_refs`、`vocab_table` 与 `chapter_map`，并对表头使用 `tblHeader`、表行使用 `cantSplit` 及首页后强制分页）。导出的目标路径应是本次选定的成品路径。
 
 有同页组时，把每组连续条目的首末编号（从 1 开始，两端均包含）写成独立数组。例如前两条为原句和跟读词组时：
 
@@ -59,14 +61,14 @@ python scripts/study_cues.py cues.json --check-narration
 
 保留首末英文，改稿增删条目后，核查脚本就能发现编号错位。将这份文件传给 `--groups`；该选项只影响 Word 的分页。纯文字字幕稿用于显示，配音从 JSON 的 `spoken` 或已准备好的逐句音频交接。
 
-交付前回看全部多高亮句、全部易混对比和所有顶部提示；检查英文短语是否完整、中文落点是否准确、例句是否真能说明该规则，再用来源对照检查覆盖。脚本核查字段和文字匹配；教学判断逐条完成。打开或渲染 Word 检查长段分页、字号和中英相邻。说明译文来源、所作订正以及实际核查范围。
+交付前与交接配音前须默认完成**两轮审查并冻结稿件**：第一轮重点核查事实与比较范围依据、目标年级词汇/句型可读性、语法准确性与学生难懂处的顶部提示补全；第二轮回看英文、译文、实际高亮与顶部提示，重点核查全部固定词组是否完整未被截断、脚本列出的多高亮句是否每组英中语义一一对应且解释到位无歧义、以及难词是否统标美式音标/词性/句中义。脚本核查字段和文字匹配；教学判断逐条完成。配套制作教学视频与打印讲义时，必须等两轮审校、`study_cues.py --strict` 及 Word/PDF 分页核对全部确认无误并冻结文本后，再交接下游配音与视频合成。说明译文来源、所作订正以及实际核查范围。
 
 ## 打印版 Word 与 PDF
 
 交付打印讲义时，默认在最终输出目录配套保存同名 Word 和 PDF。每次修订后，以最新保存的 Word 为母版重新导出。以 Microsoft Word 打印布局为准时，在 Word 中重新分页并用其自带的 PDF 导出功能生成分发版。只能用其他软件转换时，注明所用软件以及与 Word 分页的实际核验范围。
 
-- **核对内容。** 按条目顺序比对 Word 和 PDF 的英文、中文及学习提示。提取文本时可忽略排版产生的空格和换行，保留填空横线、标点和重复练习。
-- **核对分页。** 以 Word 打印布局中的页数、每页首末条目为基准，逐页对照 PDF；没有编号时用首末句定位。检查每个同页对照组的首末条目落在同一页，并在 PDF 页面上抽看中英高亮和跨页附近的长条目。发现错位时，从首个差异页核查。若需调整讲义，在 Word 中修订后重新导出并复核，再替换分发版。
+- **核对内容与编码。** 运行 `python scripts/verify_pdf_handout.py 学习稿.pdf --export-from 学习稿.docx --cues cues.json --groups 打印同页对照.json`（macOS 下先调用本地 Microsoft Word 导出 PDF，再由 `pypdf` 抽取校验；也支持传入已导出的 PDF 并附加 `--expect-front-pages 1 --no-single-cue-tail --require-ipa`）。自动检查中文字符完整、无康熙部首伪字乱码（`\u2f00–\u2fdf`）、音标符号存在，并按条目顺序比对全集条目编号无遗漏，再抽检填空横线、标点和重复练习。
+- **核对分页。** 以 Word 打印布局中的页数、每页首末条目为基准，逐页对照 PDF；没有编号时用首末句定位。确认首页参考表未溢出到第 2 页、正文末尾无孤立单条尾巴、且每个同页对照组的首末条目落在同一页，并在 PDF 页面上抽看中英高亮和跨页附近的长条目。发现错位时，从首个差异页核查。若需调整讲义，在 Word 中修订后重新导出并复核，再替换分发版。
 
 ## 接续字幕与视频
 

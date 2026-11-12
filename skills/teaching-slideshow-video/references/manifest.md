@@ -15,25 +15,31 @@
   ],
   "scenes": [
     {"cue":0, "image":"assets/classroom.png", "title":"课堂导入"}
+  ],
+  "overlays": [
+    {"image":"assets/badge.png", "cue_start":0, "cue_end":0, "max_width_ratio":0.16, "right_margin":54, "min_y":268, "max_bottom":730}
   ]
 }
 ```
 
 - `cues` 为有序中英条目。`spoken` 可调整缩写读法；缺省为 `en`。`audio` 指已有逐句音频，有它时 narrate 不调用服务。每条可覆盖 `voice`、`rate`、`pause`。场景 `cue` 为零起始条目下标，第一场必须为 0，其后严格递增。图片必须是静态本地文件。
+- `overlays` 为可选独立前景徽章数组（例如徽章、图例小图），按 `cue_start..cue_end` 闭区间叠加在右上安全区。`render` 会解析 `--ass` 中的 `StudyHintPlate` 包围盒，自动下移 `min_y` 以避开两行高提示框并校验不侵入 `max_bottom` 底部字幕区，同时把计算结果写入 `overlay_plan.json` 后离线合成为平滑分段的静态帧。
 - 有录音片段时先准备对应音频路径。清单省略 voice 和 rate 时使用包内 Lily 参考音色，默认语速 1.0。需要 Edge 时可写 provider 为 edge-tts，配合所选声音和 rate。旧清单中明确指定的 Edge 音色继续生效。
 - 音频时长及波形有极长空白时先单独检查；脚本不激进裁剪首尾，以免删掉轻辅音。
 
 ```sh
-python SKILL/scripts/lesson_media.py narrate --manifest PROJECT/lesson.json --out PROJECT/narrated.json --cache PROJECT/audio-cache
+python SKILL/scripts/lesson_media.py narrate --manifest PROJECT/lesson.json --out PROJECT/narrated.json --cache SERIES/audio-cache
+python SKILL/scripts/audit_narration.py --manifest PROJECT/narrated.json --ffmpeg /path/to/ffmpeg --report PROJECT/build/asr_audit.json
 python SKILL/scripts/lesson_media.py prepare --manifest PROJECT/narrated.json --out-dir PROJECT/build --ffmpeg /path/to/ffmpeg
 python SKILL/scripts/build_subtitles.py --build PROJECT/build --font-zh "Installed Chinese Font" --ffprobe /path/to/ffprobe
 python SKILL/scripts/format_subtitles.py --build PROJECT/build --ffmpeg /path/to/ffmpeg
 python SKILL/scripts/lesson_media.py render --build PROJECT/build --ass PROJECT/build/styled.ass --output PROJECT/lesson.mp4 --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe
+python SKILL/scripts/verify_video.py --mp4 PROJECT/lesson.mp4 --build PROJECT/build --out-dir PROJECT/verify --ffmpeg /path/to/ffmpeg --ffprobe /path/to/ffprobe
 ```
 
-build 时另传 `--font-zh` 指定已安装中文字体（例如 macOS 的 `Heiti SC`）。
+build 时另传 `--font-zh` 指定已安装中文字体（例如 macOS 的 `Heiti SC`）。系列多集制作时，可将 `narrate --cache` 指向同一系列共用缓存目录，自动去重相同句段和标准片尾。
 
-`prepare` 输出旁白、清单副本、时间轴、场景时间及低帧率黑色视频参考；成片为 30fps，参考不交付。`render` 使用所提供 ASS，不自动生成字幕；输出验证 JSON。字幕语义、图片教学准确性、ASR 和视觉抽查仍需 Agent 完成。
+`prepare` 输出旁白、清单副本、时间轴、场景时间及低帧率黑色视频参考；成片为 30fps，参考不交付。`render` 先在 `build/stage_frames/` 将唯一分镜图按 EXIF 校正并归一化为 1920×1080 RGB PNG（并预先合成 `overlays` 切片），在临时文件中烧录给定 ASS 并通过完整 FFmpeg 无错解码与 `ffprobe` 检查后，才原子写入 `--output`（修订重渲可传 `--overwrite`）。`audit_narration.py` 与 `verify_video.py` 分别完成音频物理健康+本地 Whisper 相似度抽检、关键帧拼图及 `854×480` 手机横屏图导出；最终语义与视觉判断仍需人工/Agent 完成。
 
 重复调用 narrate 可复用缓存；失败调用只保留已完成片段。缓存不能靠碰巧同名推定匹配；跨旧项目复用时核对声音、速度和朗读文本，再明确填入 audio。
 

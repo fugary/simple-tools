@@ -30,21 +30,26 @@ def main():
     probe, probe_text = inspect_executable(a.ffprobe, ['-version'])
     wh, _ = inspect_executable(a.whisper, ['--help'])
     packages = {}
-    for package in ['mlx-audio','edge-tts','pysubs2']:
+    for package in ['mlx-audio','edge-tts','pysubs2','Pillow']:
         try: packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError: packages[package] = None
+    optional_packages = {}
+    for package in ['mlx-whisper','python-docx','pypdf']:
+        try: optional_packages[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError: optional_packages[package] = None
     fc, fonts = inspect_executable('fc-list', [':lang=zh','family'])
     subtitle = Path(__file__).resolve().parents[2]/'bilingual-study-subtitles/scripts/subtitle_tool.py'
     caps = dict(ass_filter=any(' ass ' in line for line in filters.splitlines()),
                 h264_encoder='libx264' in encoders, aac_encoder=any(' aac ' in line for line in encoders.splitlines()),
                 ffprobe=bool(probe and 'ffprobe version' in probe_text), subtitle_skill=subtitle.is_file())
     report = dict(python=sys.version.split()[0], platform=platform.platform(), packages=packages,
+                  optional_packages=optional_packages,
                   executables=dict(ffmpeg=ff,ffprobe=probe,whisper=wh), capabilities=caps,
                   chinese_font_candidates=sorted(set(fonts.strip().splitlines()))[:20] if fc else [],
                   notes=['Font list may be unavailable; inspect actual rendering.',
                          'Network access, TTS availability and ASR model files are not tested.',
                          'Lily uses local mlx-audio and model weights. Existing recordings need no TTS runtime.'])
     print(json.dumps(report,ensure_ascii=False,indent=2))
-    return 0 if sys.version_info >= (3,9) and all(caps.values()) and packages['pysubs2'] else 1
+    return 0 if sys.version_info >= (3,9) and all(caps.values()) and packages['pysubs2'] and packages['Pillow'] else 1
 
 if __name__ == '__main__': sys.exit(main())
