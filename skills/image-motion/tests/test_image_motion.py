@@ -337,16 +337,37 @@ class TestImageMotion(unittest.TestCase):
             py, px = int(pivot[1] * h), int(pivot[0] * w)
             self.assertLess(float(np.abs(p_q[py, px] - p0[py, px]).max()), 0.05)
 
-            # 4) Test direct alias pipeline instantiation
+            # 3b) PendulumSwing with excluded foreground pillar: pillar pixels remain frozen
+            pend_excl = PendulumSwingEffect(
+                rgb,
+                {
+                    "rects": [[0.72, 0.72, 0.92, 0.82]],
+                    "exclude_rects": [[0.80, 0.70, 0.84, 0.85]],
+                    "pivot": pivot,
+                    "angle": 4.0,
+                    "edge_snap": False,
+                },
+            )
+            pe_q = pend_excl.apply(rgb, 0.25, 4.0)
+            pill_y, pill_x = int(0.75 * h), int(0.82 * w)
+            self.assertLess(float(np.abs(pe_q[pill_y, pill_x] - rgb[pill_y, pill_x]).max()), 0.05)
+
+            # 4) Test direct alias pipeline instantiation for all overlay kinds
             direct_plan = [
                 {"type": "star_twinkle", "count": 10},
                 {"type": "fireflies", "count": 8},
                 {"type": "aurora_veil"},
                 {"type": "petal_leaf_drift", "mode": "leaf"},
                 {"type": "light_sweep", "angle": 30.0},
+                {"type": "steam", "anchors": [[0.5, 0.5]]},
+                {"type": "sun_motes", "count": 5},
+                {"type": "warm_glow", "anchors": [[0.3, 0.3]]},
+                {"type": "sunbeam"},
+                {"type": "rain", "count": 20},
+                {"type": "snow", "count": 15},
             ]
-            pipeline = build_effect_pipeline(rgb, direct_plan)
-            self.assertEqual(len(pipeline), 5)
+            pipeline = build_effect_pipeline(rgb, direct_plan, static_regions=[{"rect": [0.1, 0.1, 0.2, 0.2], "lock_camera": True}])
+            self.assertEqual(len(pipeline), 11)
 
             # 5) Integration test rendering new effects with render_motion
             ffmpeg_exe, _ = resolve_ffmpeg("ffmpeg")

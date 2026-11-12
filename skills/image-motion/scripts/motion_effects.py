@@ -913,6 +913,19 @@ class PendulumSwingEffect(MotionEffect):
         mask_crop = self.mask[self.y0:self.y1, self.x0:self.x1]
         self.fg_alpha = mask_crop[..., None]
 
+        if exc_polys or exc_rects:
+            raw_exc = np.array(
+                rasterize_polygons(w, h, polygons=exc_polys, rects=exc_rects),
+                dtype=np.float32,
+            ) / 255.0
+            if np.any(raw_exc[self.y0:self.y1, self.x0:self.x1] > 0.01):
+                excl_crop = raw_exc[self.y0:self.y1, self.x0:self.x1]
+                self.dest_allow: np.ndarray | None = np.clip(1.0 - excl_crop, 0.0, 1.0)[..., None]
+            else:
+                self.dest_allow = None
+        else:
+            self.dest_allow = None
+
         pad_px = max(6, margin + 4)
         bg_mask = (mask_crop < 0.1).astype(np.float32)
         self.clean_bg = extend_masked_pixels(base_rgb[self.y0:self.y1, self.x0:self.x1], bg_mask, pad_px)
@@ -944,6 +957,8 @@ class PendulumSwingEffect(MotionEffect):
 
         rot_rgb = bilinear_sample(self.fg_rgb, rx, ry)
         rot_a = bilinear_sample(self.fg_alpha, rx, ry)
+        if self.dest_allow is not None:
+            rot_a = rot_a * self.dest_allow
 
         sub = frame[self.y0:self.y1, self.x0:self.x1]
         bg_blend = sub * (1.0 - self.fg_alpha) + self.clean_bg * self.fg_alpha
@@ -1353,7 +1368,7 @@ class OverlayFxEffect(MotionEffect):
                 pulse = (0.5 + 0.5 * math.sin(cyc * tau_speed + phase)) ** 2.2
                 if pulse < 0.04:
                     continue
-                reach = int(math.ceil(rad * 3.0))
+                reach = int(math.ceil(rad * (4.8 if has_spike else 3.0)))
                 x0, x1 = max(0, int(px - reach)), min(self.w, int(px + reach) + 1)
                 y0, y1 = max(0, int(py - reach)), min(self.h, int(py + reach) + 1)
                 if x1 <= x0 or y1 <= y0:
@@ -1382,7 +1397,7 @@ class OverlayFxEffect(MotionEffect):
                     continue
                 cx = bx + dx_amp * math.sin(cx_c * tau_speed + ph_x)
                 cy = by + dy_amp * math.cos(cy_c * tau_speed + ph_y)
-                reach = int(math.ceil(rad * 2.8))
+                reach = int(math.ceil(rad * 3.2))
                 x0, x1 = max(0, int(cx - reach)), min(self.w, int(cx + reach) + 1)
                 y0, y1 = max(0, int(cy - reach)), min(self.h, int(cy + reach) + 1)
                 if x1 <= x0 or y1 <= y0:
@@ -1489,6 +1504,12 @@ EFFECT_FACTORIES = {
     "depth_parallax": DepthParallaxEffect,
     "overlay_fx": OverlayFxEffect,
     # Direct type convenience aliases for overlay kinds
+    "steam": lambda base, cfg: OverlayFxEffect(base, {"kind": "steam", **cfg}),
+    "sun_motes": lambda base, cfg: OverlayFxEffect(base, {"kind": "sun_motes", **cfg}),
+    "warm_glow": lambda base, cfg: OverlayFxEffect(base, {"kind": "warm_glow", **cfg}),
+    "sunbeam": lambda base, cfg: OverlayFxEffect(base, {"kind": "sunbeam", **cfg}),
+    "rain": lambda base, cfg: OverlayFxEffect(base, {"kind": "rain", **cfg}),
+    "snow": lambda base, cfg: OverlayFxEffect(base, {"kind": "snow", **cfg}),
     "star_twinkle": lambda base, cfg: OverlayFxEffect(base, {"kind": "star_twinkle", **cfg}),
     "fireflies": lambda base, cfg: OverlayFxEffect(base, {"kind": "fireflies", **cfg}),
     "petal_leaf_drift": lambda base, cfg: OverlayFxEffect(base, {"kind": "petal_leaf_drift", **cfg}),
@@ -1549,7 +1570,7 @@ def build_effect_pipeline(
                 cfg["exclude_polygons"] = list(cfg.get("exclude_polygons", ())) + static_polys
             if static_rects:
                 cfg["exclude_rects"] = list(cfg.get("exclude_rects", ())) + static_rects
-        elif etype in {"overlay_fx", "star_twinkle", "fireflies", "petal_leaf_drift", "aurora_veil", "light_sweep"}:
+        elif etype == "overlay_fx" or etype in VALID_OVERLAY_KINDS:
             if cfg.get("respect_static_regions", False) and (static_polys or static_rects):
                 if static_polys:
                     cfg["exclude_polygons"] = list(cfg.get("exclude_polygons", ())) + static_polys
@@ -1576,6 +1597,12 @@ def build_effect_pipeline(
         "depth_parallax": 5,
         "star_twinkle": 5.8,
         "overlay_fx": 6,
+        "steam": 6,
+        "sun_motes": 6,
+        "warm_glow": 6,
+        "sunbeam": 6,
+        "rain": 6.1,
+        "snow": 6.1,
         "fireflies": 6.2,
         "petal_leaf_drift": 6.5,
         "light_sweep": 7,
