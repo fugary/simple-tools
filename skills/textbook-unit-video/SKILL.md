@@ -56,7 +56,7 @@ description: 将教材双语学习文档、补充词句清单等原始素材，�
 
 ### 阶段三：场景契合的分镜规划与配图验收
 
-遵循“一景一图、随文切景、先审后合”，详见 [质量门禁与核查细则](references/quality-gates.md#场景契合配图与防返工规范)：
+遵循“一景一图、随文切景、先审后合”，详见 [质量门禁与核查细则](references/quality-gates.md) 第三节：
 
 1. **按场景与知识进展规划 `开发记录/分镜.json` 并同步到 `lesson.json`**：
    - 严禁按固定秒数机械切图；只在**地点切换、角色/动作变更、实验阶段推进、日记日期转换**时换图（`cue` 为 0 起始下标且严格递增），最终同步写入 `lesson.json` 的 `scenes` 字段；
@@ -94,4 +94,4 @@ description: 将教材双语学习文档、补充词句清单等原始素材，�
 2. **PDF 自动化验收与目视抽检**：
    - 脚本自动调用 `bilingual-article-teaching/scripts/verify_pdf_handout.py` 校验汉字完整、无康熙部首乱码、首页不溢出第 2 页、末页无孤立单条尾巴、全集条目与 `打印同页对照.json` 全部同页；
    - 渲染 PDF 首页、第 2 页与末页图片目视抽查确认美观无错位。
-3. **归档验证记录与瘦身清理**：将 `lesson_media.py render` 产生的 `.verification.json` 合并或移入 `开发记录/成片验证.json`（记录条目数、总时长、分镜/配图数、ASR 复核、高亮核对、打印页数、抽帧数）；确认成片和讲义验收无误后，整理 `成片工程/`（`styled.ass`→`<单元名>.ass`、`study.srt`→`<单元名>.srt`，保留 `timeline.json`、`顶部提示分行.json`、`章节时间.txt`，清理 `narration.wav`、`layout-reference.mp4`、`render.ass`、`images.ffconcat`、`抽帧核验/` 及未被引用的废图/废音），保证 `课文视频输出/<单元名及主题>/` 仅保留 MP4、Word、PDF 三件套。如需跨平台投稿，可继续调用 [lesson-video-publish](../lesson-video-publish/SKILL.md)。
+3. **归档验证记录与瘦身清理**：将 `lesson_media.py render` 产生的 `.verification.json` 合并或移入 `开发记录/成片验证.json`（记录条目数、总时长、分镜/配图数、ASR 复核、高亮核对、打印页数、抽帧数）；确认成片和讲义验收无误后，整理 `成片工程/`（`styled.ass`→`<单元名>.ass`、`study.srt`→`<单元名>.srt`，保留 `timeline.json`、`顶部提示分行.json`、`章节时间.txt`，清理 `narration.wav`、`layout-reference.mp4`、`render.ass`、`images.ffconcat`、`抽帧核验/` 及未被引用的废图/废音），保证 `课文视频输出/<单元名及主题>/` 仅保留 MP4、Word、PDF 三件套。如需制作抖音 / B站 / YouTube 投稿发布包，可搭配本地项目中的 `lesson-video-publish` 技能（如已安装）。
