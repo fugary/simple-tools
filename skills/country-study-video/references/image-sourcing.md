@@ -52,7 +52,7 @@
 1. 在 `配图/sources.json` 中记录每张成片配图文件名对应的：`source_type`、`source_name`、`page_url`、`artist`、`license_short`、`license_url`（或 AI 模型来源说明）。
 2. 运行：
    ```sh
-   python scripts/write_country_sources.py --unit-dir PROJECT/Lily自然声版 --country 国家名 --en-name CountryName
-   python scripts/audit_country_assets.py --unit-dir PROJECT/Lily自然声版
+   python scripts/write_country_sources.py --unit-dir 国家介绍视频制作/<两位编号> <中文国名>（<英文国名>） --country 国家名 --en-name CountryName
+   python scripts/audit_country_assets.py --unit-dir 国家介绍视频制作/<两位编号> <中文国名>（<英文国名>）
    ```
 3. 核验通过标准：全部使用图片存在且为 `1920×1080`；`sources.json` 与 `配图来源.md` 均包含最新文件 `sha256[:16]` 校验码；禁用域名与禁用授权计数均为 `0`；国旗 SVG/PNG 与 `overlays` 配置无缺漏。

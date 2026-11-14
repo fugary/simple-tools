@@ -124,7 +124,7 @@ def audit_unit(unit_dir: Path, *, allow_attribution: bool = False) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--unit-dir", action="append", type=Path, required=True, help="Country Lily自然声版 directory (repeatable)")
+    parser.add_argument("--unit-dir", action="append", type=Path, required=True, help="Country episode directory (repeatable)")
     parser.add_argument("--allow-attribution", action="store_true", help="Permit CC BY / CC BY-SA licenses when explicitly authorized")
     parser.add_argument("--report", type=Path, help="Optional JSON audit output path")
     args = parser.parse_args()
