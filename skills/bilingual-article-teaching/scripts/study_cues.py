@@ -293,7 +293,7 @@ def _style_table_row(row, is_header=False):
         trPr.append(OxmlElement("w:tblHeader"))
 
 
-def _format_cell(cell, text, *, size_pt=9.0, bold=False, color=None, bg_hex=None, width=None):
+def _format_cell(cell, text, *, size_pt=9.0, bold=False, color=None, bg_hex=None, width=None, pad_v=30, pad_h=85):
     from docx.oxml import OxmlElement, parse_xml
     from docx.oxml.ns import nsdecls, qn
     from docx.shared import Pt
@@ -304,7 +304,7 @@ def _format_cell(cell, text, *, size_pt=9.0, bold=False, color=None, bg_hex=None
     if bg_hex:
         tcPr.append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{bg_hex}"/>'))
     tcMar = OxmlElement("w:tcMar")
-    for side, val in (("top", 34), ("bottom", 34), ("left", 85), ("right", 85)):
+    for side, val in (("top", pad_v), ("bottom", pad_v), ("left", pad_h), ("right", pad_h)):
         node = OxmlElement(f"w:{side}")
         node.set(qn("w:w"), str(val))
         node.set(qn("w:type"), "dxa")
@@ -341,8 +341,8 @@ def _add_bottom_border(paragraph, color="CBD5E1", sz="6"):
     paragraph._p.get_or_add_pPr().append(pBdr)
 
 
-def _write_structured_word(doc, rows, linked, meta):
-    """Build printable A4 handout with optional front reference tables and page-break body cues."""
+def _write_structured_word(doc, rows, linked, meta, timeline=None):
+    """Build Singapore-V2-styled printable A4 handout with optional front reference tables and chapter timestamps."""
     from docx.enum.table import WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import parse_xml
@@ -350,15 +350,20 @@ def _write_structured_word(doc, rows, linked, meta):
     from docx.shared import Cm, Pt, RGBColor
 
     navy = RGBColor(0x1E, 0x3A, 0x5F)
-    blue = RGBColor(0x1C, 0x53, 0xFD)
+    blue = RGBColor(0x1D, 0x4E, 0xD8)
+    brick = RGBColor(0x9A, 0x34, 0x12)
     dark = RGBColor(0x1F, 0x29, 0x37)
-    tip_c = RGBColor(0x3D, 0x4C, 0x50)
     muted = RGBColor(0x64, 0x74, 0x8B)
     white = RGBColor(0xFF, 0xFF, 0xFF)
 
+    meta = meta or {}
+    is_long_unit = len(rows) >= 100
+    idx_digits = 3 if is_long_unit else 2
+    indent_cm = Cm(0.95 if is_long_unit else 0.85)
+
     sec = doc.sections[0]
     sec.page_width, sec.page_height = Cm(21.0), Cm(29.7)
-    sec.top_margin = sec.bottom_margin = Cm(1.7)
+    sec.top_margin = sec.bottom_margin = Cm(1.55)
     sec.left_margin = sec.right_margin = Cm(1.9)
     sec.different_first_page_header_footer = True
     if meta.get("header"):
@@ -374,28 +379,32 @@ def _write_structured_word(doc, rows, linked, meta):
     has_front = any(meta.get(k) for k in ("title", "facts", "quick_refs", "vocab_table"))
     if meta.get("kicker"):
         p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(2)
-        _apply_font(p.add_run(meta["kicker"]), 9.5, bold=True, color=blue)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(1.5)
+        _apply_font(p.add_run(meta["kicker"]), 9.0, bold=True, color=blue)
     if meta.get("title"):
         p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(2)
-        _apply_font(p.add_run(meta["title"]), 18, bold=True, color=navy)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(1.5)
+        _apply_font(p.add_run(meta["title"]), 18.0, bold=True, color=navy)
     if meta.get("subtitle"):
         p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(5)
-        _apply_font(p.add_run(meta["subtitle"]), 10.0, color=tip_c)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(4.0)
+        _apply_font(p.add_run(meta["subtitle"]), 10.0, color=brick)
         _add_bottom_border(p, color="1E3A5F", sz="10")
 
-    def _heading(txt, size=11.0, before=6):
+    def _heading(txt, size=11.0, before=5.0, after=1.5):
         p = doc.add_paragraph()
         p.paragraph_format.space_before = Pt(before)
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.space_after = Pt(after)
         p.paragraph_format.keep_with_next = True
         _apply_font(p.add_run(txt), size, bold=True, color=navy)
         return p
 
     if meta.get("facts"):
-        _heading(meta.get("facts_heading", "一、内容概要（Profile）"), before=4)
+        default_facts_h = "一、单元小档案（Unit Profile）" if is_long_unit else "一、内容概要（Profile）"
+        _heading(meta.get("facts_heading", default_facts_h), before=4.0)
         tbl = doc.add_table(rows=len(meta["facts"]), cols=1)
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl.autofit = False
@@ -403,76 +412,79 @@ def _write_structured_word(doc, rows, linked, meta):
         _add_table_borders(tbl)
         for i, fact in enumerate(meta["facts"]):
             _style_table_row(tbl.rows[i])
-            _format_cell(tbl.rows[i].cells[0], fact, size_pt=9.0, color=dark, bg_hex="F8FAFC" if i % 2 == 0 else "F1F5F9", width=Cm(17.2))
+            _format_cell(tbl.rows[i].cells[0], fact, size_pt=9.0, color=dark, bg_hex="F8FAFC" if i % 2 == 0 else "F1F5F9", width=Cm(17.2), pad_v=28, pad_h=90)
 
     if meta.get("quick_refs"):
-        _heading(meta.get("quick_refs_heading", "二、首页代表性词组与句型速查（Quick Reference）"))
+        _heading(meta.get("quick_refs_heading", "二、首页代表性词组与句型速查（Quick Reference）"), before=5.5)
         q_items = meta["quick_refs"]
         tbl = doc.add_table(rows=1 + len(q_items), cols=4)
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl.autofit = False
         _add_table_borders(tbl)
-        widths = [Cm(1.4), Cm(6.4), Cm(7.4), Cm(2.0)]
+        widths = [Cm(1.3), Cm(6.5), Cm(7.5), Cm(1.9)]
         for j, w in enumerate(widths):
             tbl.columns[j].width = w
         _style_table_row(tbl.rows[0], is_header=True)
         for j, htxt in enumerate(("序号", "英文重点表达", "对应中文句意", "出处条目")):
-            _format_cell(tbl.rows[0].cells[j], htxt, size_pt=8.8, bold=True, color=white, bg_hex="1E3A5F", width=widths[j])
+            _format_cell(tbl.rows[0].cells[j], htxt, size_pt=8.5, bold=True, color=white, bg_hex="1E3A5F", width=widths[j], pad_v=32, pad_h=80)
         for i, (q_idx, q_en, q_zh) in enumerate(q_items, 1):
             _style_table_row(tbl.rows[i])
             bg = "FFFFFF" if i % 2 == 1 else "F8FAFC"
-            for j, val in enumerate((str(i), q_en, q_zh, f"#{q_idx:02d}")):
+            for j, val in enumerate((str(i), q_en, q_zh, f"#{q_idx:0{idx_digits}d}")):
                 is_hl = j in (1, 2)
-                _format_cell(tbl.rows[i].cells[j], val, size_pt=9.0, bold=is_hl, color=blue if is_hl else dark, bg_hex=bg, width=widths[j])
+                _format_cell(tbl.rows[i].cells[j], val, size_pt=9.0, bold=is_hl, color=blue if is_hl else dark, bg_hex=bg, width=widths[j], pad_v=28, pad_h=80)
 
     if meta.get("vocab_table"):
-        _heading(meta.get("vocab_heading", "三、核心难词学习表（美式音标与句中义）"))
+        _heading(meta.get("vocab_heading", "三、核心难词学习表（美式音标与句中义）"), before=5.5)
         vocab = meta["vocab_table"]
         tbl = doc.add_table(rows=1 + len(vocab), cols=5)
         tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
         tbl.autofit = False
         _add_table_borders(tbl)
-        widths = [Cm(2.4), Cm(2.85), Cm(2.2), Cm(8.25), Cm(1.5)]
+        widths = [Cm(2.4), Cm(2.85), Cm(2.1), Cm(8.35), Cm(1.5)]
         for j, w in enumerate(widths):
             tbl.columns[j].width = w
         _style_table_row(tbl.rows[0], is_header=True)
         for j, htxt in enumerate(("词汇", "美式音标", "词性", "句中义及提示", "所在句")):
-            _format_cell(tbl.rows[0].cells[j], htxt, size_pt=8.6, bold=True, color=white, bg_hex="1E3A5F", width=widths[j])
+            _format_cell(tbl.rows[0].cells[j], htxt, size_pt=8.5, bold=True, color=white, bg_hex="1E3A5F", width=widths[j], pad_v=32, pad_h=72)
         for i, item in enumerate(vocab, 1):
             _style_table_row(tbl.rows[i])
             bg = "FFFFFF" if i % 2 == 1 else "F8FAFC"
-            vals = (item["word"], item["ipa"], item["pos"], item["meaning"], f"#{item['cue_idx']:02d}")
+            vals = (item["word"], item["ipa"], item["pos"], item["meaning"], f"#{item['cue_idx']:0{idx_digits}d}")
             for j, val in enumerate(vals):
-                col = navy if j == 0 else (tip_c if j == 1 else dark)
-                _format_cell(tbl.rows[i].cells[j], val, size_pt=8.5, bold=(j == 0), color=col, bg_hex=bg, width=widths[j])
+                col = navy if j == 0 else (brick if j == 1 else dark)
+                _format_cell(tbl.rows[i].cells[j], val, size_pt=8.5, bold=(j == 0), color=col, bg_hex=bg, width=widths[j], pad_v=26, pad_h=72)
 
     if has_front:
         doc.add_page_break()
-    if meta.get("body_heading"):
-        p = _heading(meta["body_heading"], size=13.0, before=0)
-        p.paragraph_format.space_after = Pt(6)
+    body_h = meta.get("body_heading", "正文逐句双语精读（含重点提示与关联条目同页编排）" if has_front else None)
+    if body_h:
+        p = _heading(body_h, size=13.0, before=0.0, after=6.0)
         _add_bottom_border(p, color="1E3A5F", sz="8")
 
     chap_map = {int(k): v for k, v in (meta.get("chapter_map") or {}).items()}
     for index, cue in enumerate(rows, 1):
         if index in chap_map:
-            cp = _heading(chap_map[index], size=11.0, before=10 if index > 1 else 4)
-            cp.paragraph_format.space_after = Pt(4)
+            cp = _heading(chap_map[index], size=11.0, before=9.0 if index > 1 else 4.0, after=4.0)
+            cp.paragraph_format.tab_stops.add_tab_stop(Cm(17.2), WD_ALIGN_PARAGRAPH.RIGHT)
+            if timeline and index - 1 < len(timeline):
+                mm, ss = divmod(int(round(timeline[index - 1]["start"])), 60)
+                _apply_font(cp.add_run(f"\t成片 {mm:02d}:{ss:02d}"), 9.0, color=muted)
             _add_bottom_border(cp, color="CBD5E1", sz="4")
         notes = cue.get("notes") or []
         keep_after = index in linked
 
         p_en = doc.add_paragraph()
-        p_en.paragraph_format.left_indent = Cm(0.85)
-        p_en.paragraph_format.first_line_indent = Cm(-0.85)
-        p_en.paragraph_format.tab_stops.add_tab_stop(Cm(0.85))
-        p_en.paragraph_format.space_before = Pt(3.5)
+        p_en.paragraph_format.left_indent = indent_cm
+        p_en.paragraph_format.first_line_indent = -indent_cm
+        p_en.paragraph_format.tab_stops.add_tab_stop(indent_cm)
+        p_en.paragraph_format.space_before = Pt(3.0)
         p_en.paragraph_format.space_after = Pt(1.2)
         p_en.paragraph_format.line_spacing = 1.15
         p_en.paragraph_format.keep_together = True
         p_en.paragraph_format.keep_with_next = True
-        _apply_font(p_en.add_run(f"{index:02d}\t"), 9.5, bold=True, color=muted)
-        en_spans = _merged_spans(cue["en"], cue.get("highlight_en", []))
+        _apply_font(p_en.add_run(f"{index:0{idx_digits}d}\t"), 9.5, bold=True, color=muted)
+        en_spans = _merged_spans(cue["en"], cue.get("highlight_en") or [])
         pos = 0
         for l, r in en_spans:
             if pos < l:
@@ -483,69 +495,44 @@ def _write_structured_word(doc, rows, linked, meta):
             _apply_font(p_en.add_run(cue["en"][pos:]), 10.5, color=dark)
 
         p_zh = doc.add_paragraph()
-        p_zh.paragraph_format.left_indent = Cm(0.85)
+        p_zh.paragraph_format.left_indent = indent_cm
         p_zh.paragraph_format.space_before = Pt(0)
-        p_zh.paragraph_format.space_after = Pt(1.2 if notes else 4.5)
+        p_zh.paragraph_format.space_after = Pt(1.2 if notes else 4.0)
         p_zh.paragraph_format.line_spacing = 1.15
         p_zh.paragraph_format.keep_together = True
         p_zh.paragraph_format.keep_with_next = bool(notes) or keep_after
-        zh_spans = _merged_spans(cue["zh"], cue.get("highlight_zh", []))
+        zh_spans = _merged_spans(cue["zh"], cue.get("highlight_zh") or [])
         pos = 0
         for l, r in zh_spans:
             if pos < l:
-                _apply_font(p_zh.add_run(cue["zh"][pos:l]), 10.2, color=dark)
-            _apply_font(p_zh.add_run(cue["zh"][l:r]), 10.2, bold=True, color=blue)
+                _apply_font(p_zh.add_run(cue["zh"][pos:l]), 10.0, color=dark)
+            _apply_font(p_zh.add_run(cue["zh"][l:r]), 10.0, bold=True, color=blue)
             pos = r
         if pos < len(cue["zh"]):
-            _apply_font(p_zh.add_run(cue["zh"][pos:]), 10.2, color=dark)
+            _apply_font(p_zh.add_run(cue["zh"][pos:]), 10.0, color=dark)
 
         if notes:
             p_nt = doc.add_paragraph()
-            p_nt.paragraph_format.left_indent = Cm(0.85)
+            p_nt.paragraph_format.left_indent = indent_cm
             p_nt.paragraph_format.space_before = Pt(0)
-            p_nt.paragraph_format.space_after = Pt(4.5)
+            p_nt.paragraph_format.space_after = Pt(4.0)
             p_nt.paragraph_format.line_spacing = 1.12
             p_nt.paragraph_format.keep_together = True
             p_nt.paragraph_format.keep_with_next = keep_after
-            _apply_font(p_nt.add_run("要点　"), 9.2, bold=True, color=tip_c)
-            _apply_font(p_nt.add_run(" ".join(notes)), 9.2, color=tip_c)
+            _apply_font(p_nt.add_run("要点　"), 9.0, bold=True, color=brick)
+            _apply_font(p_nt.add_run(" ".join(notes)), 9.0, color=brick)
 
 
-def write_word(rows, path, linked=(), front_matter=None):
+def write_word(rows, path, linked=(), front_matter=None, timeline=None):
     from docx import Document
-    from docx.enum.text import WD_COLOR_INDEX
     from docx.oxml.ns import qn
-    from docx.shared import Cm, Pt, RGBColor
 
     doc = Document()
     style = doc.styles["Normal"]
     style.font.name = "Arial"
     style.element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), "Microsoft YaHei")
 
-    if front_matter:
-        _write_structured_word(doc, rows, linked, front_matter)
-        doc.save(path)
-        return
-
-    section = doc.sections[0]
-    section.page_width, section.page_height = Cm(21), Cm(29.7)
-    section.left_margin = section.right_margin = Cm(2.4)
-    section.top_margin = section.bottom_margin = Cm(2)
-    style.font.size = Pt(12)
-    style.paragraph_format.space_after = Pt(9)
-    style.paragraph_format.line_spacing = 1.22
-    for index, cue in enumerate(rows, 1):
-        paragraph = doc.add_paragraph()
-        paragraph.paragraph_format.keep_with_next = index in linked
-        paragraph.paragraph_format.keep_together = True
-        marked_runs(paragraph, cue["en"], cue.get("highlight_en", []), WD_COLOR_INDEX.YELLOW)
-        paragraph.add_run().add_break()
-        marked_runs(paragraph, cue["zh"], cue.get("highlight_zh", []), WD_COLOR_INDEX.YELLOW)
-        for note in cue.get("notes", []):
-            paragraph.add_run().add_break()
-            tip = paragraph.add_run("要点　" + note)
-            tip.font.size = Pt(10.5)
-            tip.font.color.rgb = RGBColor.from_string("36536D")
+    _write_structured_word(doc, rows, linked, front_matter or {}, timeline=timeline)
     doc.save(path)
 
 
@@ -556,6 +543,7 @@ def main():
     parser.add_argument("--text", type=Path, help="输出含字幕标注的 .txt")
     parser.add_argument("--groups", type=Path, help="带首末条目编号的同页对照 JSON")
     parser.add_argument("--front-matter", type=Path, help="可选首页档案、速查表、音标词表与章节配置 JSON")
+    parser.add_argument("--timeline", type=Path, help="可选实测时间轴 timeline.json，用于在章节标题旁标注成片起始时间")
     parser.add_argument("--strict", action="store_true", help="启用严格质检（英中高亮 1:1 次数对等、截断搭配与脏字符守卫）")
     parser.add_argument("--check-narration", action="store_true", help="配音交接前核查填空题朗读稿")
     args = parser.parse_args()
@@ -571,6 +559,10 @@ def main():
         meta = json.loads(args.front_matter.read_text(encoding="utf-8-sig"))
         for w in validate_front_matter(rows, meta, strict=args.strict):
             print("注意：" + w)
+
+    timeline = None
+    if args.timeline and args.timeline.is_file():
+        timeline = json.loads(args.timeline.read_text(encoding="utf-8-sig"))
 
     linked = set()
     if args.groups:
@@ -595,7 +587,7 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = Path(stack.enter_context(tempfile.TemporaryDirectory(dir=path.parent))) / ("study" + extension)
             if extension == ".docx":
-                write_word(rows, tmp, linked, front_matter=meta)
+                write_word(rows, tmp, linked, front_matter=meta, timeline=timeline)
             else:
                 tmp.write_text(annotated_text(rows), encoding="utf-8")
             ready.append((tmp, path))

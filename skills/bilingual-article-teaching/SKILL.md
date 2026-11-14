@@ -44,14 +44,14 @@ description: 把英文文章、教材对话或已有双语学习稿整理成适�
 
 ```sh
 python scripts/study_cues.py cues.json
-python scripts/study_cues.py cues.json --strict --front-matter meta.json --groups 打印同页对照.json --word 学习稿.docx
+python scripts/study_cues.py cues.json --strict --front-matter meta.json --timeline timeline.json --groups 打印同页对照.json --word 学习稿.docx
 python scripts/study_cues.py cues.json --word 学习稿.docx --text 字幕标注稿.txt
 python scripts/study_cues.py cues.json --groups 打印同页对照.json --word 学习稿.docx
 python scripts/study_cues.py cues.json --check-narration
 python scripts/verify_pdf_handout.py 学习稿.pdf --export-from 学习稿.docx --cues cues.json --groups 打印同页对照.json
 ```
 
-第一条只核查；加上 `--strict` 会启用严格语料校验（禁止英中高亮同句重复次数不一致、禁止同侧高亮区间重叠、拦截如 `is located` / `made up of` 或以孤立 `the`/`a`/`an`/`one of` 结尾的半截悬空搭配、弯撇号 `’`、省略号或 TODO 等开发残留；配合 `--front-matter` 时还将“难词表词汇在首现句 `notes` 中缺少音标或词性”列为硬性报错，并对超 25 词长句提示可读性复核）。传入 `lesson.json` 等含 `cues` 数组的对象也可直接识别。注意 `--word` 与 `--text` 均为**导出覆盖**参数而非校验参数：在定稿 `.docx` 已存在且仅需做终审只读复核时，**切勿传入 `--word`**（尤其不能遗漏 `--front-matter` 传入 `--word`，否则会用默认版式覆盖定制首页），只传 `--strict --groups` 即可。第三条从同一份数据导出带实际高亮和“要点”段落的 Word，以及使用 `【字幕标注】` JSON 行的可读文本。只请求一种格式时仅传对应选项。生成 Word 需要 python-docx。修订有定制版式的 Word 时，在原版式内更新相应条目；脚本的默认 Word 输出用于创建常规学习稿，需要带首页小档案、代表词组速查表与带音标核心词表的高级版式时，传入 `--front-matter meta.json`（含 `facts`、`quick_refs`、`vocab_table` 与 `chapter_map`，并对表头使用 `tblHeader`、表行使用 `cantSplit` 及首页后强制分页）。导出的目标路径应是本次选定的成品路径。
+第一条只核查；加上 `--strict` 会启用严格语料校验（禁止英中高亮同句重复次数不一致、禁止同侧高亮区间重叠、拦截如 `is located` / `made up of` 或以孤立 `the`/`a`/`an`/`one of` 结尾的半截悬空搭配、弯撇号 `’`、省略号或 TODO 等开发残留；配合 `--front-matter` 时还将“难词表词汇在首现句 `notes` 中缺少音标或词性”列为硬性报错，并对超 25 词长句提示可读性复核）。传入 `lesson.json` 等含 `cues` 数组的对象也可直接识别。注意 `--word` 与 `--text` 均为**导出覆盖**参数而非校验参数：在定稿 `.docx` 已存在且仅需做终审只读复核时，**切勿传入 `--word`**（尤其不能遗漏 `--front-matter` 传入 `--word`，否则会用默认版式覆盖定制首页），只传 `--strict --groups` 即可。Word 输出统一采用新加坡 V2 配色与排版规范（深藏青 `#1E3A5F` 标题/表头、品牌蓝 `#1D4ED8` 加粗高亮、暖砖红 `#9A3412` 副标题/音标/`要点`；`<100` 条用两位编号+`0.85 cm` 悬挂缩进，`>=100` 条用三位编号+`0.95 cm` 悬挂缩进），传入 `--front-matter meta.json`（含 `facts`、`quick_refs`、`vocab_table` 与 `chapter_map`，并对表头使用 `tblHeader`、表行使用 `cantSplit` 及首页后强制分页）即生成带首页三张参考表的高级版式；进一步传入 `--timeline timeline.json` 时自动在章节标题右侧标注 `成片 MM:SS`。导出的目标路径应是本次选定的成品路径。
 
 有同页组时，把每组连续条目的首末编号（从 1 开始，两端均包含）写成独立数组。例如前两条为原句和跟读词组时：
 
