@@ -101,7 +101,22 @@ cd "/path/to/项目/remotion_studio" && npm install
    ```
    > 若多核机器内存充足，可通过 `--concurrency=50%` 调节并发数兼顾速度与内存占用。
 
-### 步骤 5：成片自动化体检与抽帧目检
+### 步骤 5：局部微调增量补丁渲染（十秒级热修，免全片重渲染）
+当已有一版全片 `.mp4`，后续只修改了局部几秒内的**错别字/配图/浮窗文案/聚光位置/局部卡片样式**（**总时长与各镜头起止时间戳未变**）时，**严禁全片重头渲染**，直接使用 GOP 对齐的增量补丁脚本：
+```bash
+python3 /Users/gary/Documents/simple-tools/skills/remotion-study-video/scripts/patch_render.py \
+  --studio "/path/to/项目/remotion_studio" \
+  --input "/path/to/项目/remotion_studio/out/final_remotion.mp4" \
+  --ranges "5.3-8.0,48.5-55.0" \
+  --mirror-copy "/path/to/国家介绍视频输出/<编号> <国家>/<编号> <国家>.mp4"
+```
+- **工作原理**：模板已默认启用 `Config.setGopSize(60)`（2s 关键帧间隔）；脚本通过 `ffprobe` 解析现有成片的关键帧位置，将 `--ranges`（支持秒 `5.3-8.0` 或帧 `f159-f240`）或 `--scenes 0,7` 自动向外吸附到最近 GOP 关键帧，仅对脏区间调用 `npx remotion render --frames=A-B --muted` 局部重绘，其余 95%+ 画面与原音轨全部通过 FFmpeg `-f segment` + `concat` 无损直拷（`-c:v copy -c:a copy`）拼接，最后做全片解码体检与帧数守恒校验后原子替换输出（通常耗时仅 `10~35s`）。
+- **适用边界**：
+  - ✅ 局部文字、浮窗、聚光、`backdropDim`、局部换图；仅替换同长度单句配音时可额外加 `--audio public/audio/narration.wav`。
+  - ❌ 若改动了 `timeline.json` / 配音总时长或全局跨全片组件（如 `TopChrome` / `SubtitleLayer` 全局样式），仍需执行全片重渲染。
+- 支持先加 `--dry-run` 预览吸附后的帧区间与重绘比例。
+
+### 步骤 6：成片自动化体检与抽帧目检
 ```bash
 python3 /Users/gary/Documents/simple-tools/skills/remotion-study-video/scripts/verify_render.py \
   "/path/to/项目/remotion_studio/out/final_remotion.mp4" \
