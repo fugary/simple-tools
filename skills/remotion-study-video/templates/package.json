@@ -1,0 +1,23 @@
+{
+  "name": "remotion-study-video-project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render StudyVideo out/final_remotion.mp4",
+    "render:sample": "remotion render StudyVideo out/sample.mp4 --frames=0-450",
+    "build": "remotion bundle"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "@remotion/transitions": "4.0.543",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.543"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.6.3"
+  }
+}

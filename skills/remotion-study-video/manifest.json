@@ -1,0 +1,14 @@
+{
+  "name": "remotion-study-video",
+  "version": "1.0.0",
+  "category": "Educational Video / Remotion Motion Graphics",
+  "description": "基于 Remotion (React + TypeScript) 的双语教学动效视频制作技能。直接消费上游教研/配音/字幕产物（timeline.json、scenes.json、narration.wav），以高清静态实景底图 + React 磨砂玻璃 HUD + 局部聚光灯聚焦 + @remotion/transitions 转场 + 实拍 Screen 混合素材取代 image-motion 像素扭曲与手写 CDP 截图管线。",
+  "compat": [
+    "claude-code",
+    "claude-ai",
+    "cursor",
+    "codex-cli",
+    "gemini-cli",
+    "antigravity"
+  ]
+}
