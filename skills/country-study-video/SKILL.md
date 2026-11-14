@@ -12,8 +12,8 @@ description: 给定一个或多个国家名，制作小学高年级至初中适�
    - **地理/历史/文化复核与孩子视角通读**：再次交叉核对第 1 轮确立的数据与比较范围表述无滑坡；孩子可能读不懂的术语、文化专名、语法转折全部补上直白、无歧义的顶部提示（遮住译文复述检验）。
    - **难词音标词性统一与解释到位**：全部核心难词统一在首页词表及正文**首次出现句的 `notes`** 中标明**美式音标 `/.../`、词性与句中义**。
    - **英中、高亮与提示逐条核对**：重点检查固定词组/短语是否完整（严禁截断在 `is located`、`borders with` 或孤立冠词/介词上）、**地理/历史/工程等复合专名是否完整整段高亮**（如 `Trans-Siberian Railway`、`Scandinavian Peninsula`，禁止只标其中半个词）、同一句多处高亮在英文与中文之间是否各自一一对应且顶部解释清楚到位。
-3. **定稿硬门禁：脚本强制校验 + Word/PDF 讲义核验全部通过后冻结文本。** 从定稿母稿导出正式打印版 `.docx`（带首页档案/速查表/音标难词表及 `同页对照.json`）与洁净清单（`lesson.json`、`分镜.json`、`复习主题.json`、`同页对照.json`），严格依次执行以下两道硬核查：
-   - 运行 `../bilingual-article-teaching/scripts/study_cues.py lesson.json --strict --front-matter ... --groups 同页对照.json --check-narration`，确认 0 错误，并对脚本列出的所有多高亮句与超长句完成人工确认；
+3. **定稿硬门禁：脚本强制校验 + Word/PDF 讲义核验全部通过后冻结文本。** 先准备定稿首页元数据（`front_matter.json`，含 `kicker`/`title`/`subtitle`/`header`/`facts`/`quick_refs`/`vocab_table`/`chapter_map`）与洁净清单（`lesson.json`、`分镜.json`、`复习主题.json`、`同页对照.json`），直接调用 `../bilingual-article-teaching/scripts/study_cues.py` 导出正式打印版 `.docx` 并完成校验，严格依次执行以下两道硬核查：
+   - 运行 `../bilingual-article-teaching/scripts/study_cues.py lesson.json --strict --front-matter front_matter.json --groups 同页对照.json --check-narration --word <国家介绍中英文学习稿（打印版）.docx>`（如已有成片时间线可追加 `--timeline 成片工程/timeline.json`；`study_cues.py --word --front-matter` 已内置新加坡 V2 蓝红讲义样式，`<100` 条自动两位编号与 `0.85 cm` 悬挂缩进，`>=100` 条自动三位编号与 `0.95 cm` 缩进，禁止另行手写 Word 生成脚本），确认 0 错误，并对脚本列出的所有多高亮句与超长句完成人工确认；
    - 运行 `../bilingual-article-teaching/scripts/verify_pdf_handout.py ... --export-from ... --cues lesson.json --groups 同页对照.json --expect-front-pages 1 --no-single-cue-tail --require-ipa`（macOS 下由 Word 导出最新 PDF），确认中文编码完整、无康熙部首乱码、首页未溢出、末页无单条孤儿、全集条目与同页分组 100% 对位。
    - **前置冻结闸门**：必须确认第 1–3 步以上全部文字、史实、标注与打印讲义确认无误并**冻结文本内容**后，才允许进入后续配音、配图合成与视频渲染操作；若后续发现文字需修订，必须回到本步骤重审、重导讲义并重新冻结，严禁带着未定稿或有错讲义进入配音与渲染。
 4. **按“零版权 + 史实防错”选图并构建国旗叠加层。** 配图严格遵循四条铁律（详见[配图来源与无版权选图规范](references/image-sourcing.md)）：
